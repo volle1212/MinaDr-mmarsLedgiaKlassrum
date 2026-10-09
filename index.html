@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classroom Tracker</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 0 auto; padding: 12px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+  nav button { padding: 6px 12px; margin-right: 4px; cursor: pointer; }
+  nav button.active { background: #222; color: #fff; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+  th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+  .free { color: #2a7; } .busy { color: #c33; font-weight: bold; }
+  .day h3 { margin: 12px 0 4px; }
+  form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 12px 0; padding: 10px; border: 1px solid #ccc; }
+  form label { display: flex; flex-direction: column; font-size: 12px; }
+  #msg { color: #c33; min-height: 1.2em; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Classroom Tracker</h1>
+  <div>
+    <input id="pw" type="password" placeholder="Edit password" size="14">
+    <button id="login">Unlock editing</button>
+    <span id="lock">🔒</span>
+  </div>
+</header>
+<nav>
+  <button data-tab="now" class="active">Right now</button>
+  <button data-tab="room">Room schedule</button>
+  <button data-tab="edit">Edit</button>
+</nav>
+<div id="msg"></div>
+
+<section id="tab-now"></section>
+
+<section id="tab-room" class="hidden">
+  <select id="roomSel"></select>
+  <div id="roomView"></div>
+</section>
+
+<section id="tab-edit" class="hidden">
+  <p id="editLocked">Enter the password above to edit.</p>
+  <div id="editArea" class="hidden">
+    <form id="form">
+      <input type="hidden" name="id">
+      <label>Room <input name="room" list="rooms" required></label>
+      <datalist id="rooms"></datalist>
+      <label>Day
+        <select name="day">
+          <option value="1">Monday</option><option value="2">Tuesday</option>
+          <option value="3">Wednesday</option><option value="4">Thursday</option>
+          <option value="5">Friday</option>
+        </select>
+      </label>
+      <label>Start <input name="start_time" type="time" required></label>
+      <label>End <input name="end_time" type="time" required></label>
+      <label>Class <input name="class_name" required></label>
+      <label>Teacher <input name="teacher"></label>
+      <label>Notes <input name="notes"></label>
+      <div style="align-self:end">
+        <button type="submit" id="saveBtn">Add lesson</button>
+        <button type="button" id="cancelBtn" class="hidden">Cancel edit</button>
+      </div>
+    </form>
+    <div id="editList"></div>
+  </div>
+</section>
+
+<script>
+const DAYS = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+let lessons = [];
+let password = localStorage.getItem('pw') || '';
+let unlocked = false;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const msg = t => { $('#msg').textContent = t || ''; };
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'x-password': password, ...(opts.headers || {}) },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+async function load() {
+  try { lessons = await api('/api/lessons'); msg(); }
+  catch (e) { msg('Could not load: ' + e.message); }
+  render();
+}
+
+/* ---------- views ---------- */
+const rooms = () => [...new Set(lessons.map(l => l.room))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+function renderNow() {
+  const d = new Date();
+  const day = d.getDay(); // 0 Sun
+  const t = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  let html = `<p>${day >= 1 && day <= 5 ? DAYS[day] : 'Weekend'}, ${t}</p>`;
+  if (!rooms().length) html += '<p>No lessons yet. Unlock editing and add some.</p>';
+  else {
+    html += '<table><tr><th>Room</th><th>Now</th><th>Next</th></tr>';
+    for (const room of rooms()) {
+      const todays = lessons.filter(l => l.room === room && l.day === day).sort((a, b) => a.start_time.localeCompare(b.start_time));
+      const cur = todays.find(l => l.start_time <= t && t < l.end_time);
+      const next = todays.find(l => l.start_time > t);
+      const fmt = l => l ? `${esc(l.class_name)} <small>(${l.start_time}-${l.end_time}${l.teacher ? ', ' + esc(l.teacher) : ''})</small>` : '–';
+      html += `<tr><td>${esc(room)}</td><td class="${cur ? 'busy' : 'free'}">${cur ? fmt(cur) : 'Free'}</td><td>${fmt(next)}</td></tr>`;
+    }
+    html += '</table>';
+  }
+  $('#tab-now').innerHTML = html;
+}
+
+function renderRoom() {
+  const sel = $('#roomSel');
+  const prev = sel.value;
+  sel.innerHTML = rooms().map(r => `<option>${esc(r)}</option>`).join('');
+  if (prev && rooms().includes(prev)) sel.value = prev;
+  let html = '';
+  for (let d = 1; d <= 5; d++) {
+    const ls = lessons.filter(l => l.room === sel.value && l.day === d).sort((a, b) => a.start_time.localeCompare(b.start_time));
+    html += `<div class="day"><h3>${DAYS[d]}</h3>`;
+    html += ls.length
+      ? '<table>' + ls.map(l => `<tr><td width="120">${l.start_time}-${l.end_time}</td><td>${esc(l.class_name)}</td><td>${esc(l.teacher)}</td><td>${esc(l.notes)}</td></tr>`).join('') + '</table>'
+      : '<small>Nothing scheduled</small>';
+    html += '</div>';
+  }
+  $('#roomView').innerHTML = html;
+}
+
+function renderEdit() {
+  $('#editLocked').classList.toggle('hidden', unlocked);
+  $('#editArea').classList.toggle('hidden', !unlocked);
+  $('#rooms').innerHTML = rooms().map(r => `<option value="${esc(r)}">`).join('');
+  if (!unlocked) return;
+  const sorted = [...lessons].sort((a, b) => a.room.localeCompare(b.room, undefined, { numeric: true }) || a.day - b.day || a.start_time.localeCompare(b.start_time));
+  $('#editList').innerHTML = '<table><tr><th>Room</th><th>Day</th><th>Time</th><th>Class</th><th>Teacher</th><th></th></tr>' +
+    sorted.map(l => `<tr><td>${esc(l.room)}</td><td>${DAYS[l.day]}</td><td>${l.start_time}-${l.end_time}</td><td>${esc(l.class_name)}</td><td>${esc(l.teacher)}</td>
+      <td><button data-edit="${l.id}">Edit</button> <button data-del="${l.id}">Delete</button></td></tr>`).join('') + '</table>';
+}
+
+function render() {
+  $('#lock').textContent = unlocked ? '🔓' : '🔒';
+  renderNow(); renderRoom(); renderEdit();
+}
+
+/* ---------- events ---------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
+  for (const t of ['now', 'room', 'edit']) $('#tab-' + t).classList.toggle('hidden', t !== b.dataset.tab);
+});
+$('#roomSel').onchange = renderRoom;
+
+async function tryLogin(pw) {
+  password = pw;
+  try { await api('/api/auth'); unlocked = true; localStorage.setItem('pw', pw); msg(); }
+  catch (e) { unlocked = false; msg(e.message); }
+  render();
+}
+$('#login').onclick = () => tryLogin($('#pw').value);
+
+const form = $('#form');
+function resetForm() {
+  form.reset(); form.id.value = '';
+  $('#saveBtn').textContent = 'Add lesson';
+  $('#cancelBtn').classList.add('hidden');
+}
+$('#cancelBtn').onclick = resetForm;
+
+form.onsubmit = async e => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(form));
+  const editing = !!body.id;
+  try {
+    await api('/api/lessons', { method: editing ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    msg(); resetForm(); await load();
+  } catch (err) { msg(err.message); }
+};
+
+$('#editList').onclick = async e => {
+  const del = e.target.dataset.del, ed = e.target.dataset.edit;
+  if (del && confirm('Delete this lesson?')) {
+    try { await api('/api/lessons?id=' + del, { method: 'DELETE' }); await load(); }
+    catch (err) { msg(err.message); }
+  }
+  if (ed) {
+    const l = lessons.find(x => x.id == ed);
+    for (const k of ['id', 'room', 'day', 'start_time', 'end_time', 'class_name', 'teacher', 'notes']) form[k].value = l[k] ?? '';
+    $('#saveBtn').textContent = 'Save changes';
+    $('#cancelBtn').classList.remove('hidden');
+    window.scrollTo(0, 0);
+  }
+};
+
+/* ---------- start ---------- */
+if (password) { $('#pw').value = password; tryLogin(password); }
+load();
+setInterval(renderNow, 30000);
+</script>
+</body>
+</html>
