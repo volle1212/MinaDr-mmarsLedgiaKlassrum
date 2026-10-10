@@ -1,84 +1,329 @@
 <!doctype html>
-<html lang="en">
+<html lang="sv">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mina Drömmars Lediga Klassrum</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 0 auto; padding: 12px; }
-  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
-  nav button { padding: 6px 12px; margin-right: 4px; cursor: pointer; }
-  nav button.active { background: #222; color: #fff; }
-  table { border-collapse: collapse; width: 100%; margin: 8px 0; }
-  th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
-  .free { color: #2a7; } .busy { color: #c33; font-weight: bold; }
-  .day h3 { margin: 12px 0 4px; }
-  form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 12px 0; padding: 10px; border: 1px solid #ccc; }
-  form label { display: flex; flex-direction: column; font-size: 12px; }
-  #msg { color: #c33; min-height: 1.2em; }
-  .hidden { display: none; }
+  :root {
+    --bg:#f4f5f7; --card:#fff; --ink:#1b1f27; --muted:#5d6675; --line:#d8dce3;
+    --accent:#1f4fd8; --free:#137a3f; --busy:#b3261e; --est:#7a4f00; --estbg:#ffefc2;
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html { -webkit-text-size-adjust:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+         padding-bottom:calc(76px + env(safe-area-inset-bottom)); }
+  .wrap { max-width:720px; margin:0 auto; padding:0 12px; }
+  :focus-visible { outline:3px solid #7aa2ff; outline-offset:2px; }
+
+  .top { background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5;
+         padding-top:env(safe-area-inset-top); }
+  .bar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:52px; }
+  h1 { font-size:17px; margin:0; line-height:1.2; }
+  h2 { font-size:17px; margin:22px 0 8px; }
+  .card h2 { margin-top:0; }
+  .pill { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 12px;
+          font:inherit; font-size:14px; min-height:40px; white-space:nowrap; }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; margin:12px 0; }
+  .hint, .sub { font-size:14px; color:var(--muted); }
+  .empty { color:var(--muted); padding:16px 4px; }
+
+  label { display:block; font-size:14px; color:var(--muted); margin-top:10px; }
+  input, select { display:block; width:100%; margin-top:4px; font:inherit; font-size:16px; padding:10px;
+                  border:1px solid #aab1bd; border-radius:8px; background:#fff; color:var(--ink); min-height:44px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  details { margin-top:12px; }
+  summary { cursor:pointer; padding:8px 0; color:var(--accent); }
+
+  .btn { font:inherit; min-height:44px; padding:8px 14px; border-radius:8px; border:1px solid #aab1bd;
+         background:#fff; color:var(--ink); cursor:pointer; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+  .btn.big { width:100%; margin-top:14px; min-height:54px; font-size:18px; }
+  .btn.danger { color:var(--busy); border-color:#e2b4b0; }
+  .btn.small { min-height:36px; padding:4px 10px; font-size:14px; }
+  .btn[disabled] { opacity:.6; }
+  .btnrow { display:flex; gap:8px; margin-top:14px; }
+  .btnrow .btn { flex:1; }
+
+  .seg { display:flex; border:1px solid #aab1bd; border-radius:8px; overflow:hidden; }
+  .seg button { flex:1; border:0; background:#fff; padding:10px; font:inherit; min-height:44px; cursor:pointer; }
+  .seg button[aria-pressed="true"] { background:var(--ink); color:#fff; font-weight:700; }
+  .controls { display:grid; gap:10px; }
+  .timeline { font-size:15px; }
+
+  .floor { font-size:15px; color:var(--muted); margin:18px 2px 4px; font-weight:600; }
+  .room { display:flex; gap:12px; align-items:center; background:var(--card); border:1px solid var(--line);
+          border-left:8px solid var(--free); border-radius:8px; padding:10px 12px; margin:6px 0; }
+  .room.busy { border-left-color:var(--busy); }
+  .room.est { border-left-style:dashed; }
+  .rname { font-size:20px; font-weight:700; min-width:62px; }
+  .stat { font-weight:700; }
+  .stat.free { color:var(--free); } .stat.busy { color:var(--busy); }
+  .tag { display:inline-block; background:var(--estbg); color:var(--est); border-radius:10px; padding:1px 8px;
+         font-size:12px; font-weight:700; margin-left:4px; vertical-align:middle; }
+
+  .dayh { font-size:15px; margin:18px 0 6px; font-weight:700; }
+  .lesson { display:grid; grid-template-columns:104px 1fr; gap:8px; background:var(--card); border:1px solid var(--line);
+            border-left:6px solid var(--busy); border-radius:8px; padding:10px 12px; margin:6px 0; }
+  .lesson.est { border-left-style:dashed; }
+  .lesson .time { font-weight:700; font-variant-numeric:tabular-nums; }
+  .lesson .btn { margin-top:6px; }
+
+  .item { display:flex; justify-content:space-between; gap:8px; align-items:center; background:var(--card);
+          border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:6px 0; }
+  .item > div:first-child { min-width:0; overflow-wrap:anywhere; }
+  .item .acts { display:flex; gap:6px; flex-shrink:0; }
+  .result { border-left:6px solid var(--accent); }
+
+  .tabs { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line);
+          display:flex; padding-bottom:env(safe-area-inset-bottom); z-index:6; }
+  .tabs button { flex:1; border:0; background:none; padding:8px 2px; min-height:58px; font:inherit; font-size:12px;
+                 color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; }
+  .tabs .ic { font-size:20px; line-height:1; }
+  .tabs button[aria-current="page"] { color:var(--accent); font-weight:700; box-shadow:inset 0 3px 0 var(--accent); }
+
+  #toast { position:fixed; left:12px; right:12px; bottom:calc(68px + env(safe-area-inset-bottom)); z-index:10;
+           max-width:696px; margin:0 auto; background:var(--ink); color:#fff; padding:12px 14px; border-radius:8px; }
+  #toast.err { background:var(--busy); }
 </style>
 </head>
 <body>
-<header>
+<header class="top"><div class="wrap bar">
   <h1>Mina Drömmars Lediga Klassrum</h1>
-  <div>
-    <input id="pw" type="password" placeholder="Edit password" size="14">
-    <button id="login">Unlock editing</button>
-    <span id="lock">🔒</span>
-  </div>
-</header>
-<nav>
-  <button data-tab="now" class="active">Right now</button>
-  <button data-tab="room">Room schedule</button>
-  <button data-tab="edit">Edit</button>
-</nav>
-<div id="msg"></div>
+  <button id="lockBtn" class="pill" type="button">🔒 Låst</button>
+</div></header>
 
-<section id="tab-now"></section>
+<main class="wrap">
 
-<section id="tab-room" class="hidden">
-  <select id="roomSel"></select>
-  <div id="roomView"></div>
-</section>
-
-<section id="tab-edit" class="hidden">
-  <p id="editLocked">Enter the password above to edit.</p>
-  <div id="editArea" class="hidden">
-    <form id="form">
-      <input type="hidden" name="id">
-      <label>Room <input name="room" list="rooms" required></label>
-      <datalist id="rooms"></datalist>
-      <label>Day
-        <select name="day">
-          <option value="1">Monday</option><option value="2">Tuesday</option>
-          <option value="3">Wednesday</option><option value="4">Thursday</option>
-          <option value="5">Friday</option>
-        </select>
-      </label>
-      <label>Start <input name="start_time" type="time" required></label>
-      <label>End <input name="end_time" type="time" required></label>
-      <label>Class <input name="class_name" required></label>
-      <label>Teacher <input name="teacher"></label>
-      <label>Notes <input name="notes"></label>
-      <div style="align-self:end">
-        <button type="submit" id="saveBtn">Add lesson</button>
-        <button type="button" id="cancelBtn" class="hidden">Cancel edit</button>
+  <!-- JUST NU -->
+  <section id="tab-now">
+    <div class="card controls">
+      <div class="timeline" id="timeLine"></div>
+      <div class="seg" role="group" aria-label="Filter">
+        <button type="button" data-filter="all" aria-pressed="true">Alla salar</button>
+        <button type="button" data-filter="free" aria-pressed="false">Bara lediga</button>
       </div>
-    </form>
-    <div id="editList"></div>
-  </div>
-</section>
+      <div class="two">
+        <select id="floorSel" aria-label="Våning"></select>
+        <button type="button" class="btn" id="chgTime">Ändra tid</button>
+      </div>
+      <div id="timePanel" class="two" hidden>
+        <label>Dag
+          <select id="ovDay">
+            <option value="1">Måndag</option><option value="2">Tisdag</option><option value="3">Onsdag</option>
+            <option value="4">Torsdag</option><option value="5">Fredag</option>
+          </select>
+        </label>
+        <label>Klockan <input type="time" id="ovTime"></label>
+        <button type="button" class="btn" id="ovNow" style="grid-column:1/-1">Tillbaka till nu</button>
+      </div>
+    </div>
+    <div id="nowSummary" class="hint"></div>
+    <div id="nowList"></div>
+  </section>
+
+  <!-- SALSSCHEMA -->
+  <section id="tab-room" hidden>
+    <div class="card">
+      <label for="roomSel" style="margin-top:0">Sal</label>
+      <select id="roomSel"></select>
+    </div>
+    <div id="roomView"></div>
+  </section>
+
+  <!-- REGISTRERA OBSERVATION -->
+  <section id="tab-see" hidden>
+    <div class="lockSlot"></div>
+    <div class="needsAuth">
+      <form id="sForm" class="card" autocomplete="off">
+        <h2>Jag ser en lektion just nu</h2>
+        <p class="hint">Alla fält är valfria. Tomt tidsfält betyder "nu".</p>
+        <label>Sal <input name="room" list="dlRooms" placeholder="t.ex. A207 (eller bara 207)" autocapitalize="characters"></label>
+        <label>Lärare <input name="teacher" list="dlTeachers" placeholder="t.ex. Henrik"></label>
+        <label>Klass / grupp <input name="class_name" list="dlClasses" placeholder="t.ex. TE21"></label>
+        <label>Anteckning <input name="notes" placeholder="t.ex. Kemisalen"></label>
+        <details>
+          <summary>Jag såg det vid en annan tid</summary>
+          <div class="two">
+            <label>Datum <input type="date" name="seen_date"></label>
+            <label>Klockan <input type="time" name="seen_time"></label>
+          </div>
+        </details>
+        <button class="btn primary big" type="submit" id="sBtn">Registrera</button>
+      </form>
+      <div id="seeResult" class="card result" hidden></div>
+      <h2>Senaste observationer</h2>
+      <div id="recentList"></div>
+    </div>
+  </section>
+
+  <!-- REDIGERA -->
+  <section id="tab-edit" hidden>
+    <div class="lockSlot"></div>
+    <div class="needsAuth">
+      <form id="lForm" class="card" autocomplete="off">
+        <h2 id="lTitle">Lägg till lektion med exakta tider</h2>
+        <p class="hint">Exakta lektioner går alltid före gissningar från observationer.</p>
+        <input type="hidden" name="id">
+        <label>Sal <input name="room" list="dlRooms" required placeholder="t.ex. A207" autocapitalize="characters"></label>
+        <label>Dag
+          <select name="day">
+            <option value="1">Måndag</option><option value="2">Tisdag</option><option value="3">Onsdag</option>
+            <option value="4">Torsdag</option><option value="5">Fredag</option>
+          </select>
+        </label>
+        <div class="two">
+          <label>Start <input type="time" name="start_time" required></label>
+          <label>Slut <input type="time" name="end_time" required></label>
+        </div>
+        <label>Klass / grupp <input name="class_name" list="dlClasses"></label>
+        <label>Lärare <input name="teacher" list="dlTeachers"></label>
+        <label>Anteckning <input name="notes"></label>
+        <div class="btnrow">
+          <button class="btn primary" type="submit" id="lSave">Lägg till lektion</button>
+          <button class="btn" type="button" id="lCancel" hidden>Avbryt</button>
+        </div>
+      </form>
+      <h2>Inlagda lektioner</h2>
+      <div id="lessonList"></div>
+      <h2>Alla observationer</h2>
+      <div id="sightingList"></div>
+    </div>
+  </section>
+</main>
+
+<datalist id="dlRooms"></datalist>
+<datalist id="dlTeachers"></datalist>
+<datalist id="dlClasses"></datalist>
+
+<nav class="tabs" aria-label="Huvudmeny">
+  <button type="button" data-tab="now" aria-current="page"><span class="ic">🟢</span>Just nu</button>
+  <button type="button" data-tab="room"><span class="ic">📅</span>Salsschema</button>
+  <button type="button" data-tab="see"><span class="ic">👁</span>Registrera</button>
+  <button type="button" data-tab="edit"><span class="ic">✏️</span>Redigera</button>
+</nav>
+<div id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
-const DAYS = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-let lessons = [];
-let password = localStorage.getItem('pw') || '';
-let unlocked = false;
+/* ======================================================================
+   LOGIK (ren, inga DOM-beroenden) – här justerar du standardlektionerna
+   ====================================================================== */
+/* LOGIC-START */
+const DAYS = ['söndag','måndag','tisdag','onsdag','torsdag','fredag','lördag'];
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+const CFG = {
+  am: { until: '11:00', start: '08:30', end: '11:20' },  // observation före 11:00  -> förmiddagslektion
+  pm: { from:  '13:00', start: '12:20', end: '15:10' },  // observation från 13:00  -> eftermiddagslektion
+  slack: 30,                                              // hur långt utanför standardtiden en observation räknas in (min)
+};
+
+const pad = n => String(n).padStart(2, '0');
+const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const toHM = n => pad(Math.floor(n / 60)) + ':' + pad(n % 60);
+const uniq = a => [...new Set(a.filter(Boolean))];
+
+// "207" -> "A207". Salar börjar på A, första siffran = våning.
+const normRoom = s => { s = String(s || '').toUpperCase().replace(/\s+/g, ''); return /^\d{3}$/.test(s) ? 'A' + s : s; };
+const floorOf = r => { const m = /^A(\d)/.exec(r); return m ? Number(m[1]) : null; };
+const roomCmp = (a, b) => a.localeCompare(b, 'sv', { numeric: true });
+
+// Tidsram en enskild observation antas tillhöra
+function sightingWindow(sg) {
+  const t = toMin(sg.seen_time), S = CFG.slack;
+  const a0 = toMin(CFG.am.start), a1 = toMin(CFG.am.end);
+  const p0 = toMin(CFG.pm.start), p1 = toMin(CFG.pm.end);
+  if (t < toMin(CFG.am.until) && t >= a0 - S) return { s: Math.min(t, a0), e: Math.max(t, a1) };
+  if (t >= toMin(CFG.pm.from) && t <= p1 + S) return { s: Math.min(t, p0), e: Math.max(t, p1) };
+  return { s: t, e: t };   // utanför standardpassen: bara en punkt, ingen gissad längd
+}
+
+const overlaps = (c, l) =>
+  (c.s < l.e && c.e > l.s) || (c.s === c.e && c.s >= l.s && c.s < l.e);
+
+// Observationer i samma sal + veckodag vars tidsramar överlappar slås ihop
+// och tidsramen växer så att den täcker alla observationer.
+function buildClusters(sightings) {
+  const groups = new Map();
+  for (const sg of sightings) {
+    if (!sg.room || sg.day < 1 || sg.day > 5) continue;
+    const w = sightingWindow(sg), key = sg.room + '|' + sg.day;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ sg, s: w.s, e: w.e });
+  }
+  const out = [];
+  const finish = c => out.push({
+    source: 'estimate', room: c.room, day: c.day, s: c.s, e: c.e, start: toHM(c.s), end: toHM(c.e),
+    point: c.s === c.e, count: c.sgs.length,
+    teacher: uniq(c.sgs.map(x => x.teacher)).join(', '),
+    class_name: uniq(c.sgs.map(x => x.class_name)).join(', '),
+    notes: uniq(c.sgs.map(x => x.notes)).join(', '),
+  });
+  for (const items of groups.values()) {
+    items.sort((a, b) => a.s - b.s || a.e - b.e);
+    let cur = null;
+    for (const it of items) {
+      if (cur && it.s <= cur.e) { cur.e = Math.max(cur.e, it.e); cur.sgs.push(it.sg); }
+      else { if (cur) finish(cur); cur = { room: it.sg.room, day: it.sg.day, s: it.s, e: it.e, sgs: [it.sg] }; }
+    }
+    if (cur) finish(cur);
+  }
+  return out;
+}
+
+// Exakta lektioner + gissningar. Exakta vinner: gissningar som överlappar en exakt lektion tas bort.
+function buildEntries(lessons, sightings) {
+  const exact = lessons.map(l => ({
+    source: 'exact', id: l.id, room: normRoom(l.room), day: l.day, start: l.start_time, end: l.end_time,
+    s: toMin(l.start_time), e: toMin(l.end_time), point: false,
+    class_name: l.class_name || '', teacher: l.teacher || '', notes: l.notes || '',
+  }));
+  const est = buildClusters(sightings).filter(c => !exact.some(l => l.room === c.room && l.day === c.day && overlaps(c, l)));
+  return exact.concat(est);
+}
+
+// Status för en sal vid en viss veckodag/tid (minuter). liveDate = dagens datum om vi tittar på "nu".
+function roomStatus(room, day, t, entries, sightings, liveDate) {
+  const here = entries.filter(x => x.room === room && x.day === day);
+  const list = here.filter(x => !x.point).sort((a, b) => a.s - b.s);
+  const cur = list.find(x => x.s <= t && t < x.e) || null;
+  const next = list.find(x => x.s > t) || null;
+  let recent = null;   // observation de senaste 30 min som inte täcks av någon lektion
+  if (!cur && liveDate) {
+    recent = sightings.find(sg => sg.room === room && sg.seen_date === liveDate &&
+      t - toMin(sg.seen_time) >= 0 && t - toMin(sg.seen_time) <= 30) || null;
+  }
+  return { busy: !!(cur || recent), cur, recent, next, hasData: here.length > 0 };
+}
+/* LOGIC-END */
+
+/* ======================================================================
+   APP
+   ====================================================================== */
+let lessons = [], sightings = [], ENTRIES = [];
+let password = '';
+try { password = localStorage.getItem('pw') || ''; } catch (e) {}
+let unlocked = false, onlyFree = false, floorFilter = '', viewOverride = null;
 
 const $ = s => document.querySelector(s);
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const msg = t => { $('#msg').textContent = t || ''; };
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const nowHM = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const fmtDate = s => { const [, m, d] = s.split('-').map(Number); return `${d}/${m}`; };
+const lessonText = x => [x.class_name, x.teacher, x.notes].filter(Boolean).join(' · ');
+const estTag = x => `<span class="tag">gissning${x.count > 1 ? ' · ' + x.count + ' obs.' : ''}</span>`;
+const allRooms = () => uniq([...lessons.map(l => normRoom(l.room)), ...sightings.map(s => s.room)]).sort(roomCmp);
+
+let toastTimer;
+function toast(text, err) {
+  const el = $('#toast');
+  el.textContent = text; el.className = err ? 'err' : ''; el.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, err ? 7000 : 3500);
+}
 
 async function api(path, opts = {}) {
   const r = await fetch(path, {
@@ -86,124 +331,320 @@ async function api(path, opts = {}) {
     headers: { 'Content-Type': 'application/json', 'x-password': password, ...(opts.headers || {}) },
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || r.statusText);
+  if (!r.ok) throw new Error(data.error || ('Fel ' + r.status));
   return data;
 }
 
-async function load() {
-  try { lessons = await api('/api/lessons'); msg(); }
-  catch (e) { msg('Could not load: ' + e.message); }
+async function load(silent) {
+  try {
+    const [l, s] = await Promise.all([api('/api/lessons'), api('/api/sightings')]);
+    lessons = l; sightings = s;
+  } catch (e) { if (!silent) toast('Kunde inte hämta data: ' + e.message, true); }
   render();
 }
 
-/* ---------- views ---------- */
-const rooms = () => [...new Set(lessons.map(l => l.room))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-
-function renderNow() {
-  const d = new Date();
-  const day = d.getDay(); // 0 Sun
-  const t = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-  let html = `<p>${day >= 1 && day <= 5 ? DAYS[day] : 'Weekend'}, ${t}</p>`;
-  if (!rooms().length) html += '<p>No lessons yet. Unlock editing and add some.</p>';
-  else {
-    html += '<table><tr><th>Room</th><th>Now</th><th>Next</th></tr>';
-    for (const room of rooms()) {
-      const todays = lessons.filter(l => l.room === room && l.day === day).sort((a, b) => a.start_time.localeCompare(b.start_time));
-      const cur = todays.find(l => l.start_time <= t && t < l.end_time);
-      const next = todays.find(l => l.start_time > t);
-      const fmt = l => l ? `${esc(l.class_name)} <small>(${l.start_time}-${l.end_time}${l.teacher ? ', ' + esc(l.teacher) : ''})</small>` : '–';
-      html += `<tr><td>${esc(room)}</td><td class="${cur ? 'busy' : 'free'}">${cur ? fmt(cur) : 'Free'}</td><td>${fmt(next)}</td></tr>`;
-    }
-    html += '</table>';
+/* ---------- Just nu ---------- */
+function roomRow(room, st) {
+  const est = st.cur ? st.cur.source === 'estimate' : !!st.recent;
+  let stat, sub = '';
+  if (st.cur) { stat = `Upptagen till ${st.cur.end}`; sub = lessonText(st.cur); }
+  else if (st.recent) { stat = `Upptagen (sedd ${st.recent.seen_time})`; sub = lessonText(st.recent); }
+  else if (st.next) {
+    stat = `Ledig till ${st.next.start}`;
+    sub = `Nästa ${st.next.start}–${st.next.end}` + (lessonText(st.next) ? ' · ' + esc(lessonText(st.next)) : '') +
+          (st.next.source === 'estimate' ? estTag(st.next) : '');
+  } else {
+    stat = 'Ledig resten av dagen';
+    if (!st.hasData) sub = 'Ingen data för den här dagen';
   }
-  $('#tab-now').innerHTML = html;
+  const subHtml = st.next && !st.cur && !st.recent ? sub : esc(sub);
+  return `<div class="room ${st.busy ? 'busy' : 'free'}${est ? ' est' : ''}">
+    <div class="rname">${esc(room)}</div>
+    <div><div class="stat ${st.busy ? 'busy' : 'free'}">${stat}${est ? estTag(st.cur || { count: 0 }) : ''}</div>
+    ${subHtml ? `<div class="sub">${subHtml}</div>` : ''}</div></div>`;
 }
 
+function renderNow() {
+  const ov = viewOverride;
+  const day = ov ? ov.day : new Date().getDay();
+  const tStr = ov ? ov.time : nowHM();
+  const t = toMin(tStr);
+  const live = !ov;
+  $('#timeLine').innerHTML = ov
+    ? `Visar <b>${cap(DAYS[day])} ${esc(tStr)}</b> (inte just nu)`
+    : `Just nu: <b>${cap(DAYS[day])} ${tStr}</b>` + ((day === 0 || day === 6) ? ' – helg, inga lektioner är schemalagda' : '');
+
+  const rooms = allRooms();
+  const floors = uniq(rooms.map(r => { const f = floorOf(r); return f === null ? 'x' : String(f); })).sort();
+  const fs = $('#floorSel');
+  fs.innerHTML = '<option value="">Alla våningar</option>' +
+    floors.map(f => `<option value="${f}">${f === 'x' ? 'Övriga salar' : 'Våning ' + f}</option>`).join('');
+  fs.value = floors.includes(floorFilter) ? floorFilter : '';
+  if (fs.value !== floorFilter) floorFilter = fs.value;
+
+  $$('[data-filter]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.filter === 'free') === onlyFree)));
+
+  if (!rooms.length) {
+    $('#nowSummary').textContent = '';
+    $('#nowList').innerHTML = '<p class="empty">Inga salar finns ännu. Gå till <b>Registrera</b> och lägg in din första observation.</p>';
+    return;
+  }
+
+  const groups = new Map();
+  let total = 0, free = 0;
+  for (const r of rooms) {
+    const f = floorOf(r), fk = f === null ? 'x' : String(f);
+    if (floorFilter && fk !== floorFilter) continue;
+    const st = roomStatus(r, day, t, ENTRIES, sightings, live ? todayStr() : null);
+    total++; if (!st.busy) free++;
+    if (onlyFree && st.busy) continue;
+    if (!groups.has(fk)) groups.set(fk, []);
+    groups.get(fk).push(roomRow(r, st));
+  }
+  $('#nowSummary').textContent = `${free} lediga av ${total} salar`;
+  const keys = [...groups.keys()].sort((a, b) => (a === 'x') - (b === 'x') || a.localeCompare(b));
+  $('#nowList').innerHTML = keys.length
+    ? keys.map(k => `<div class="floor">${k === 'x' ? 'Övriga salar' : 'Våning ' + k}</div>${groups.get(k).join('')}`).join('')
+    : '<p class="empty">Inga lediga salar vid den här tiden.</p>';
+}
+
+/* ---------- Salsschema ---------- */
 function renderRoom() {
-  const sel = $('#roomSel');
-  const prev = sel.value;
-  sel.innerHTML = rooms().map(r => `<option>${esc(r)}</option>`).join('');
-  if (prev && rooms().includes(prev)) sel.value = prev;
+  const sel = $('#roomSel'), rooms = allRooms(), prev = sel.value;
+  sel.innerHTML = rooms.map(r => {
+    const f = floorOf(r);
+    return `<option value="${esc(r)}">${esc(r)}${f !== null ? ' · våning ' + f : ''}</option>`;
+  }).join('');
+  if (rooms.includes(prev)) sel.value = prev;
+  if (!rooms.length) { $('#roomView').innerHTML = '<p class="empty">Inga salar ännu.</p>'; return; }
+
+  const today = new Date().getDay();
   let html = '';
   for (let d = 1; d <= 5; d++) {
-    const ls = lessons.filter(l => l.room === sel.value && l.day === d).sort((a, b) => a.start_time.localeCompare(b.start_time));
-    html += `<div class="day"><h3>${DAYS[d]}</h3>`;
-    html += ls.length
-      ? '<table>' + ls.map(l => `<tr><td width="120">${l.start_time}-${l.end_time}</td><td>${esc(l.class_name)}</td><td>${esc(l.teacher)}</td><td>${esc(l.notes)}</td></tr>`).join('') + '</table>'
-      : '<small>Nothing scheduled</small>';
-    html += '</div>';
+    const items = ENTRIES.filter(x => x.room === sel.value && x.day === d).sort((a, b) => a.s - b.s || a.e - b.e);
+    html += `<div class="dayh">${cap(DAYS[d])}${d === today ? ' (idag)' : ''}</div>`;
+    if (!items.length) { html += '<div class="sub" style="padding:0 4px">Inget känt</div>'; continue; }
+    for (const x of items) {
+      const idx = ENTRIES.indexOf(x), est = x.source === 'estimate';
+      html += `<div class="lesson${est ? ' est' : ''}">
+        <div class="time">${x.point ? 'Sedd ' + x.start : x.start + '–' + x.end}</div>
+        <div>
+          <div><b>${esc(lessonText(x) || (est ? 'Okänd lektion' : 'Lektion'))}</b>${est ? estTag(x) : ''}</div>
+          ${est && x.point ? '<div class="sub">Utanför standardpassen – ingen tidsram gissad</div>' : ''}
+          ${est ? `<button type="button" class="btn small" data-exact="${idx}">Gör till exakt lektion</button>` : ''}
+        </div></div>`;
+    }
   }
   $('#roomView').innerHTML = html;
 }
 
+/* ---------- Registrera ---------- */
+function describeSighting(row) {
+  if (!row.room) return 'Sparad utan sal – den syns därför inte i schemat. Ange en sal så räknas den med.';
+  if (row.day < 1 || row.day > 5) return 'Sparad, men den infaller på en helg och räknas inte i veckoschemat.';
+  const t = toMin(row.seen_time);
+  const ex = ENTRIES.find(x => x.source === 'exact' && x.room === row.room && x.day === row.day && x.s <= t && t < x.e);
+  if (ex) return `Stämmer med inlagd lektion ${ex.start}–${ex.end} i ${row.room}.`;
+  const est = ENTRIES.find(x => x.source === 'estimate' && x.room === row.room && x.day === row.day && x.s <= t && t <= x.e);
+  if (est && est.point) return `Sparad som en punkt kl ${row.seen_time}. Det är utanför standardpassen, så ingen tidsram gissas.`;
+  if (est) return `Räknas som lektion ca ${est.start}–${est.end} i ${row.room} (gissning${est.count > 1 ? ', ' + est.count + ' observationer' : ''}).`;
+  return 'Sparad.';
+}
+
+function sightingItem(sg) {
+  const main = [sg.room || '(ingen sal)', sg.teacher, sg.class_name].filter(Boolean).join(' · ');
+  return `<div class="item"><div><b>${esc(main)}</b>
+    <div class="sub">${cap(DAYS[sg.day]).slice(0, 3)} ${fmtDate(sg.seen_date)} kl ${esc(sg.seen_time)}${sg.notes ? ' · ' + esc(sg.notes) : ''}</div></div>
+    <div class="acts"><button type="button" class="btn small danger" data-delsg="${sg.id}">Ta bort</button></div></div>`;
+}
+
+function renderSee() {
+  $('#recentList').innerHTML = sightings.length
+    ? sightings.slice(0, 8).map(sightingItem).join('')
+    : '<p class="empty">Inga observationer ännu.</p>';
+}
+
+/* ---------- Redigera ---------- */
 function renderEdit() {
-  $('#editLocked').classList.toggle('hidden', unlocked);
-  $('#editArea').classList.toggle('hidden', !unlocked);
-  $('#rooms').innerHTML = rooms().map(r => `<option value="${esc(r)}">`).join('');
-  if (!unlocked) return;
-  const sorted = [...lessons].sort((a, b) => a.room.localeCompare(b.room, undefined, { numeric: true }) || a.day - b.day || a.start_time.localeCompare(b.start_time));
-  $('#editList').innerHTML = '<table><tr><th>Room</th><th>Day</th><th>Time</th><th>Class</th><th>Teacher</th><th></th></tr>' +
-    sorted.map(l => `<tr><td>${esc(l.room)}</td><td>${DAYS[l.day]}</td><td>${l.start_time}-${l.end_time}</td><td>${esc(l.class_name)}</td><td>${esc(l.teacher)}</td>
-      <td><button data-edit="${l.id}">Edit</button> <button data-del="${l.id}">Delete</button></td></tr>`).join('') + '</table>';
+  const sorted = [...lessons].sort((a, b) => roomCmp(normRoom(a.room), normRoom(b.room)) || a.day - b.day || a.start_time.localeCompare(b.start_time));
+  $('#lessonList').innerHTML = sorted.length ? sorted.map(l => `<div class="item"><div>
+      <b>${esc(normRoom(l.room))}</b> · ${cap(DAYS[l.day])} ${l.start_time}–${l.end_time}
+      <div class="sub">${esc(lessonText(l)) || 'Utan namn'}</div></div>
+      <div class="acts"><button type="button" class="btn small" data-editl="${l.id}">Ändra</button>
+      <button type="button" class="btn small danger" data-dell="${l.id}">Ta bort</button></div></div>`).join('')
+    : '<p class="empty">Inga exakta lektioner inlagda.</p>';
+  $('#sightingList').innerHTML = sightings.length ? sightings.map(sightingItem).join('') : '<p class="empty">Inga observationer ännu.</p>';
+}
+
+function renderLists() {
+  const opts = a => a.map(v => `<option value="${esc(v)}">`).join('');
+  $('#dlRooms').innerHTML = opts(allRooms());
+  const all = [...lessons, ...sightings];
+  $('#dlTeachers').innerHTML = opts(uniq(all.map(x => x.teacher)).sort());
+  $('#dlClasses').innerHTML = opts(uniq(all.map(x => x.class_name)).sort());
 }
 
 function render() {
-  $('#lock').textContent = unlocked ? '🔓' : '🔒';
-  renderNow(); renderRoom(); renderEdit();
+  ENTRIES = buildEntries(lessons, sightings);
+  $('#lockBtn').textContent = unlocked ? '🔓 Upplåst' : '🔒 Låst';
+  $$('.lockSlot').forEach(el => { el.hidden = unlocked; });
+  $$('.needsAuth').forEach(el => { el.hidden = !unlocked; });
+  renderNow(); renderRoom(); renderSee(); renderEdit(); renderLists();
 }
 
-/* ---------- events ---------- */
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
-  for (const t of ['now', 'room', 'edit']) $('#tab-' + t).classList.toggle('hidden', t !== b.dataset.tab);
-});
-$('#roomSel').onchange = renderRoom;
+/* ---------- Lås / flikar ---------- */
+function showTab(name) {
+  for (const t of ['now', 'room', 'see', 'edit']) $('#tab-' + t).hidden = t !== name;
+  $$('.tabs button').forEach(b => b.toggleAttribute('aria-current', b.dataset.tab === name));
+  $$('.tabs button').forEach(b => { if (b.dataset.tab === name) b.setAttribute('aria-current', 'page'); });
+  window.scrollTo(0, 0);
+}
 
-async function tryLogin(pw) {
+async function tryLogin(pw, silent) {
   password = pw;
-  try { await api('/api/auth'); unlocked = true; localStorage.setItem('pw', pw); msg(); }
-  catch (e) { unlocked = false; msg(e.message); }
+  try {
+    await api('/api/auth');
+    unlocked = true;
+    try { localStorage.setItem('pw', pw); } catch (e) {}
+    if (!silent) toast('Upplåst');
+  } catch (e) {
+    unlocked = false;
+    if (!silent) toast(e.message, true);
+  }
   render();
 }
-$('#login').onclick = () => tryLogin($('#pw').value);
 
-const form = $('#form');
-function resetForm() {
-  form.reset(); form.id.value = '';
-  $('#saveBtn').textContent = 'Add lesson';
-  $('#cancelBtn').classList.add('hidden');
+function lockPanelHTML() {
+  return `<div class="card"><h2>Lösenord krävs</h2>
+    <p class="hint">Alla kan titta. För att registrera eller ändra behövs lösenordet.</p>
+    <label>Lösenord <input type="password" class="pwInput" autocomplete="current-password"></label>
+    <button type="button" class="btn primary big pwBtn">Lås upp</button></div>`;
 }
-$('#cancelBtn').onclick = resetForm;
 
-form.onsubmit = async e => {
+/* ---------- Händelser ---------- */
+$$('.lockSlot').forEach(el => { el.innerHTML = lockPanelHTML(); });
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.classList.contains('pwInput')) { e.preventDefault(); tryLogin(e.target.value); }
+});
+
+const lForm = $('#lForm'), sForm = $('#sForm');
+const lf = n => lForm.elements[n];
+
+function resetLessonForm() {
+  lForm.reset(); lf('id').value = '';
+  $('#lTitle').textContent = 'Lägg till lektion med exakta tider';
+  $('#lSave').textContent = 'Lägg till lektion';
+  $('#lCancel').hidden = true;
+}
+function fillLessonForm(v, title, saveLabel) {
+  lForm.reset();
+  for (const k of ['id', 'room', 'day', 'start_time', 'end_time', 'class_name', 'teacher', 'notes']) lf(k).value = v[k] ?? '';
+  $('#lTitle').textContent = title; $('#lSave').textContent = saveLabel; $('#lCancel').hidden = false;
+  showTab('edit');
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+
+  if (d.tab) return showTab(d.tab);
+  if (b.id === 'lockBtn') {
+    if (unlocked) { unlocked = false; password = ''; try { localStorage.removeItem('pw'); } catch (er) {} render(); toast('Låst'); }
+    else showTab('see');
+    return;
+  }
+  if (b.classList.contains('pwBtn')) { const inp = b.closest('.card').querySelector('.pwInput'); return tryLogin(inp.value); }
+
+  if (d.filter) { onlyFree = d.filter === 'free'; return renderNow(); }
+  if (b.id === 'chgTime') {
+    const p = $('#timePanel');
+    if (p.hidden) {
+      const dd = new Date().getDay();
+      $('#ovDay').value = (dd >= 1 && dd <= 5) ? dd : 1; $('#ovTime').value = nowHM();
+      viewOverride = { day: Number($('#ovDay').value), time: $('#ovTime').value };
+      p.hidden = false;
+    } else { viewOverride = null; p.hidden = true; }
+    return renderNow();
+  }
+  if (b.id === 'ovNow') { viewOverride = null; $('#timePanel').hidden = true; return renderNow(); }
+
+  if (d.exact !== undefined) {
+    const en = ENTRIES[Number(d.exact)]; if (!en) return;
+    fillLessonForm({ room: en.room, day: en.day, start_time: en.start, end_time: en.point ? '' : en.end,
+      class_name: en.class_name, teacher: en.teacher, notes: en.notes }, 'Gör till exakt lektion', 'Spara lektion');
+    lf('id').value = '';
+    return;
+  }
+  if (d.editl) {
+    const l = lessons.find(x => String(x.id) === d.editl); if (!l) return;
+    return fillLessonForm({ ...l, room: normRoom(l.room) }, 'Ändra lektion', 'Spara ändringar');
+  }
+  if (d.dell) {
+    if (!confirm('Ta bort lektionen?')) return;
+    try { await api('/api/lessons?id=' + d.dell, { method: 'DELETE' }); await load(); toast('Borttagen'); }
+    catch (er) { toast(er.message, true); }
+    return;
+  }
+  if (d.delsg) {
+    if (!confirm('Ta bort observationen?')) return;
+    try { await api('/api/sightings?id=' + d.delsg, { method: 'DELETE' }); await load(); toast('Borttagen'); }
+    catch (er) { toast(er.message, true); }
+    return;
+  }
+  if (b.id === 'lCancel') return resetLessonForm();
+});
+
+$('#floorSel').addEventListener('change', e => { floorFilter = e.target.value; renderNow(); });
+$('#roomSel').addEventListener('change', renderRoom);
+for (const id of ['#ovDay', '#ovTime']) {
+  $(id).addEventListener('change', () => {
+    viewOverride = { day: Number($('#ovDay').value), time: $('#ovTime').value || nowHM() };
+    renderNow();
+  });
+}
+
+sForm.addEventListener('submit', async e => {
   e.preventDefault();
-  const body = Object.fromEntries(new FormData(form));
+  const f = new FormData(sForm), btn = $('#sBtn');
+  const body = {
+    room: normRoom(f.get('room')),
+    teacher: String(f.get('teacher') || '').trim(),
+    class_name: String(f.get('class_name') || '').trim(),
+    notes: String(f.get('notes') || '').trim(),
+    seen_date: f.get('seen_date') || todayStr(),
+    seen_time: f.get('seen_time') || nowHM(),
+  };
+  btn.disabled = true;
+  try {
+    const row = await api('/api/sightings', { method: 'POST', body: JSON.stringify(body) });
+    await load(true);
+    const box = $('#seeResult');
+    box.innerHTML = `<b>Registrerat:</b> ${esc([row.room || 'ingen sal', row.teacher, row.class_name].filter(Boolean).join(' · '))}
+      kl ${esc(row.seen_time)}<div class="sub">${esc(describeSighting(row))}</div>`;
+    box.hidden = false;
+    sForm.reset();
+    toast('Observation sparad');
+  } catch (er) { toast(er.message, true); }
+  btn.disabled = false;
+});
+
+lForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(lForm));
+  body.room = normRoom(body.room);
   const editing = !!body.id;
   try {
     await api('/api/lessons', { method: editing ? 'PUT' : 'POST', body: JSON.stringify(body) });
-    msg(); resetForm(); await load();
-  } catch (err) { msg(err.message); }
-};
+    resetLessonForm(); await load(true); toast('Lektionen är sparad');
+  } catch (er) { toast(er.message, true); }
+});
 
-$('#editList').onclick = async e => {
-  const del = e.target.dataset.del, ed = e.target.dataset.edit;
-  if (del && confirm('Delete this lesson?')) {
-    try { await api('/api/lessons?id=' + del, { method: 'DELETE' }); await load(); }
-    catch (err) { msg(err.message); }
-  }
-  if (ed) {
-    const l = lessons.find(x => x.id == ed);
-    for (const k of ['id', 'room', 'day', 'start_time', 'end_time', 'class_name', 'teacher', 'notes']) form[k].value = l[k] ?? '';
-    $('#saveBtn').textContent = 'Save changes';
-    $('#cancelBtn').classList.remove('hidden');
-    window.scrollTo(0, 0);
-  }
-};
-
-/* ---------- start ---------- */
-if (password) { $('#pw').value = password; tryLogin(password); }
+/* ---------- Start ---------- */
+if (password) tryLogin(password, true);
 load();
 setInterval(renderNow, 30000);
+setInterval(() => { if (!document.hidden) load(true); }, 60000);
 </script>
 </body>
 </html>
