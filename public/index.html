@@ -78,9 +78,22 @@
   .item .acts { display:flex; gap:6px; flex-shrink:0; }
   .result { border-left:6px solid var(--accent); }
 
+  .trow { display:block; background:var(--card); border:1px solid var(--line); border-left:8px solid #aab1bd;
+          border-radius:8px; padding:10px 12px; margin:6px 0; }
+  .trow.in { border-left-color:var(--accent); }
+  .trow.est { border-left-style:dashed; }
+  .trow summary { color:inherit; padding:0; cursor:pointer; list-style:none; }
+  .trow summary::-webkit-details-marker { display:none; }
+  .trow summary::after { content:'▾'; float:right; color:var(--muted); }
+  .trow[open] summary::after { content:'▴'; }
+  .tn { font-size:18px; font-weight:700; }
+  .stat.in { color:var(--accent); } .stat.none { color:var(--muted); }
+  .tweek { margin-top:8px; border-top:1px solid var(--line); padding-top:2px; }
+  .tweek .lesson { border-left-color:var(--accent); }
+
   .tabs { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line);
           display:flex; padding-bottom:env(safe-area-inset-bottom); z-index:6; }
-  .tabs button { flex:1; border:0; background:none; padding:8px 2px; min-height:58px; font:inherit; font-size:12px;
+  .tabs button { flex:1; border:0; background:none; padding:8px 2px; min-height:58px; font:inherit; font-size:11px;
                  color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; }
   .tabs .ic { font-size:20px; line-height:1; }
   .tabs button[aria-current="page"] { color:var(--accent); font-weight:700; box-shadow:inset 0 3px 0 var(--accent); }
@@ -98,28 +111,32 @@
 
 <main class="wrap">
 
+  <!-- TIDSRUTA (delas av Just nu och Lärare) -->
+  <div id="timeBox" class="card controls">
+    <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center">
+      <div class="timeline" id="timeLine"></div>
+      <button type="button" class="btn small" id="chgTime">Ändra tid</button>
+    </div>
+    <div id="timePanel" class="two" hidden>
+      <label>Dag
+        <select id="ovDay">
+          <option value="1">Måndag</option><option value="2">Tisdag</option><option value="3">Onsdag</option>
+          <option value="4">Torsdag</option><option value="5">Fredag</option>
+        </select>
+      </label>
+      <label>Klockan <input type="time" id="ovTime"></label>
+      <button type="button" class="btn" id="ovNow" style="grid-column:1/-1">Tillbaka till nu</button>
+    </div>
+  </div>
+
   <!-- JUST NU -->
   <section id="tab-now">
     <div class="card controls">
-      <div class="timeline" id="timeLine"></div>
       <div class="seg" role="group" aria-label="Filter">
         <button type="button" data-filter="all" aria-pressed="true">Alla salar</button>
         <button type="button" data-filter="free" aria-pressed="false">Bara lediga</button>
       </div>
-      <div class="two">
-        <select id="floorSel" aria-label="Våning"></select>
-        <button type="button" class="btn" id="chgTime">Ändra tid</button>
-      </div>
-      <div id="timePanel" class="two" hidden>
-        <label>Dag
-          <select id="ovDay">
-            <option value="1">Måndag</option><option value="2">Tisdag</option><option value="3">Onsdag</option>
-            <option value="4">Torsdag</option><option value="5">Fredag</option>
-          </select>
-        </label>
-        <label>Klockan <input type="time" id="ovTime"></label>
-        <button type="button" class="btn" id="ovNow" style="grid-column:1/-1">Tillbaka till nu</button>
-      </div>
+      <select id="floorSel" aria-label="Våning"></select>
     </div>
     <div id="nowSummary" class="hint"></div>
     <div id="nowList"></div>
@@ -134,6 +151,16 @@
     <div id="roomView"></div>
   </section>
 
+  <!-- LÄRARE -->
+  <section id="tab-teach" hidden>
+    <div class="card">
+      <label for="tSearch" style="margin-top:0">Sök lärare</label>
+      <input id="tSearch" type="search" placeholder="t.ex. Natalie" autocomplete="off">
+    </div>
+    <div id="teachSummary" class="hint"></div>
+    <div id="teachList"></div>
+  </section>
+
   <!-- REGISTRERA OBSERVATION -->
   <section id="tab-see" hidden>
     <div class="lockSlot"></div>
@@ -142,7 +169,7 @@
         <h2>Jag ser en lektion just nu</h2>
         <p class="hint">Alla fält är valfria. Tomt tidsfält betyder "nu".</p>
         <label>Sal <input name="room" list="dlRooms" placeholder="t.ex. A207 (eller bara 207)" autocapitalize="characters"></label>
-        <label>Lärare <input name="teacher" list="dlTeachers" placeholder="t.ex. Henrik"></label>
+        <label>Lärare <input name="teacher" list="dlTeachers" placeholder="t.ex. Henrik (flera: Henrik, Natalie)"></label>
         <label>Klass / grupp <input name="class_name" list="dlClasses" placeholder="t.ex. TE21"></label>
         <label>Anteckning <input name="notes" placeholder="t.ex. Kemisalen"></label>
         <details>
@@ -180,7 +207,7 @@
           <label>Slut <input type="time" name="end_time" required></label>
         </div>
         <label>Klass / grupp <input name="class_name" list="dlClasses"></label>
-        <label>Lärare <input name="teacher" list="dlTeachers"></label>
+        <label>Lärare <input name="teacher" list="dlTeachers" placeholder="flera: Henrik, Natalie"></label>
         <label>Anteckning <input name="notes"></label>
         <div class="btnrow">
           <button class="btn primary" type="submit" id="lSave">Lägg till lektion</button>
@@ -201,7 +228,8 @@
 
 <nav class="tabs" aria-label="Huvudmeny">
   <button type="button" data-tab="now" aria-current="page"><span class="ic">🟢</span>Just nu</button>
-  <button type="button" data-tab="room"><span class="ic">📅</span>Salsschema</button>
+  <button type="button" data-tab="room"><span class="ic">📅</span>Salar</button>
+  <button type="button" data-tab="teach"><span class="ic">👤</span>Lärare</button>
   <button type="button" data-tab="see"><span class="ic">👁</span>Registrera</button>
   <button type="button" data-tab="edit"><span class="ic">✏️</span>Redigera</button>
 </nav>
@@ -298,6 +326,41 @@ function roomStatus(room, day, t, entries, sightings, liveDate) {
   }
   return { busy: !!(cur || recent), cur, recent, next, hasData: here.length > 0 };
 }
+
+/* ---- Lärare ---- */
+const tkey = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+// "Henrik, Natalie" / "Anna och Bo" / "A & B" -> flera lärare
+const splitTeachers = s => String(s || '').split(/[,;/&]|\boch\b/i).map(x => x.trim().replace(/\s+/g, ' ')).filter(Boolean);
+const entryHasTeacher = (x, key) => splitTeachers(x.teacher).some(n => tkey(n) === key);
+
+// Alla unika lärare (versaler/mellanslag spelar ingen roll; vanligaste stavningen visas)
+function teacherList(lessons, sightings) {
+  const counts = new Map();
+  for (const src of [lessons, sightings]) for (const x of src) for (const n of splitTeachers(x.teacher)) {
+    const k = tkey(n);
+    if (!counts.has(k)) counts.set(k, new Map());
+    counts.get(k).set(n, (counts.get(k).get(n) || 0) + 1);
+  }
+  return [...counts].map(([key, m]) => ({ key, name: [...m].sort((a, b) => b[1] - a[1])[0][0] }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+}
+
+// Var är läraren? Samma modell som för salar: exakta lektioner, gissningar och (live) senaste observation idag.
+function teacherStatus(key, day, t, entries, sightings, liveDate) {
+  const mine = entries.filter(x => x.day === day && entryHasTeacher(x, key));
+  const list = mine.filter(x => !x.point).sort((a, b) => a.s - b.s);
+  const curs = list.filter(x => x.s <= t && t < x.e)
+    .sort((a, b) => (a.source === 'exact' ? 0 : 1) - (b.source === 'exact' ? 0 : 1));
+  const next = list.find(x => x.s > t) || null;
+  let seen = null;
+  if (liveDate) {
+    seen = sightings
+      .filter(sg => sg.room && sg.seen_date === liveDate && toMin(sg.seen_time) <= t && entryHasTeacher(sg, key))
+      .sort((a, b) => toMin(b.seen_time) - toMin(a.seen_time))[0] || null;
+  }
+  return { cur: curs[0] || null, curs, next, seen,
+           seenRecent: !!seen && t - toMin(seen.seen_time) <= 30, hasData: mine.length > 0 };
+}
 /* LOGIC-END */
 
 /* ======================================================================
@@ -364,15 +427,24 @@ function roomRow(room, st) {
     ${subHtml ? `<div class="sub">${subHtml}</div>` : ''}</div></div>`;
 }
 
-function renderNow() {
+function viewTime() {
   const ov = viewOverride;
   const day = ov ? ov.day : new Date().getDay();
   const tStr = ov ? ov.time : nowHM();
-  const t = toMin(tStr);
-  const live = !ov;
+  return { ov, day, tStr, t: toMin(tStr), live: !ov };
+}
+
+function renderTime() {
+  const { ov, day, tStr } = viewTime();
   $('#timeLine').innerHTML = ov
     ? `Visar <b>${cap(DAYS[day])} ${esc(tStr)}</b> (inte just nu)`
-    : `Just nu: <b>${cap(DAYS[day])} ${tStr}</b>` + ((day === 0 || day === 6) ? ' – helg, inga lektioner är schemalagda' : '');
+    : `Just nu: <b>${cap(DAYS[day])} ${tStr}</b>` + ((day === 0 || day === 6) ? '<br><span class="hint">Helg – inga lektioner är schemalagda</span>' : '');
+}
+
+function renderViews() { renderTime(); renderNow(); renderTeachers(); }
+
+function renderNow() {
+  const { day, t, live } = viewTime();
 
   const rooms = allRooms();
   const floors = uniq(rooms.map(r => { const f = floorOf(r); return f === null ? 'x' : String(f); })).sort();
@@ -406,6 +478,69 @@ function renderNow() {
   $('#nowList').innerHTML = keys.length
     ? keys.map(k => `<div class="floor">${k === 'x' ? 'Övriga salar' : 'Våning ' + k}</div>${groups.get(k).join('')}`).join('')
     : '<p class="empty">Inga lediga salar vid den här tiden.</p>';
+}
+
+/* ---------- Lärare ---------- */
+const openTeachers = new Set();
+const lt = x => [x.class_name, x.notes].filter(Boolean).join(' · ');
+
+function teacherWeek(key) {
+  const today = new Date().getDay();
+  let html = '<div class="tweek">';
+  for (let d = 1; d <= 5; d++) {
+    const items = ENTRIES.filter(x => x.day === d && entryHasTeacher(x, key)).sort((a, b) => a.s - b.s || a.e - b.e);
+    html += `<div class="dayh">${cap(DAYS[d])}${d === today ? ' (idag)' : ''}</div>`;
+    if (!items.length) { html += '<div class="sub">Inget känt</div>'; continue; }
+    for (const x of items) {
+      const est = x.source === 'estimate';
+      html += `<div class="lesson${est ? ' est' : ''}"><div class="time">${x.point ? 'Sedd ' + x.start : x.start + '–' + x.end}</div>
+        <div><b>${esc(x.room)}</b>${lt(x) ? ' · ' + esc(lt(x)) : ''}${est ? estTag(x) : ''}</div></div>`;
+    }
+  }
+  return html + '</div>';
+}
+
+function renderTeachers() {
+  const { day, t, live } = viewTime();
+  const q = tkey($('#tSearch').value);
+  const all = teacherList(lessons, sightings);
+  if (!all.length) {
+    $('#teachSummary').textContent = '';
+    $('#teachList').innerHTML = '<p class="empty">Inga lärare ännu. Fyll i lärarnamn när du registrerar en observation eller lägger in en lektion.</p>';
+    return;
+  }
+  const shown = all.filter(x => !q || x.key.includes(q));
+  const autoOpen = !!q && shown.length === 1;
+  let inCount = 0;
+  const rows = shown.map(tc => {
+    const st = teacherStatus(tc.key, day, t, ENTRIES, sightings, live ? todayStr() : null);
+    const inL = !!(st.cur || st.seenRecent);
+    const est = st.cur ? st.cur.source === 'estimate' : st.seenRecent;
+    if (inL) inCount++;
+    let stat, sub = '';
+    if (st.cur) {
+      stat = `I ${esc(uniq(st.curs.map(c => c.room)).join(' eller '))} till ${st.cur.end}`;
+      sub = esc(lt(st.cur));
+    } else if (st.seenRecent) {
+      stat = `Sedd i ${esc(st.seen.room)} kl ${esc(st.seen.seen_time)}`;
+      sub = esc(lt(st.seen));
+    } else {
+      stat = 'Ingen lektion just nu';
+      const parts = [];
+      if (st.next) parts.push(`Nästa: ${esc(st.next.room)} ${st.next.start}–${st.next.end}` + (st.next.source === 'estimate' ? estTag(st.next) : ''));
+      if (st.seen) parts.push(`Senast sedd idag: ${esc(st.seen.room)} kl ${esc(st.seen.seen_time)}`);
+      if (!parts.length && !st.hasData) parts.push('Ingen data för den här dagen');
+      sub = parts.join('<br>');
+    }
+    const isOpen = openTeachers.has(tc.key) || autoOpen;
+    return `<details class="trow${inL ? ' in' : ''}${est ? ' est' : ''}" data-teacher="${esc(tc.key)}"${autoOpen && !openTeachers.has(tc.key) ? ' data-auto="1"' : ''}${isOpen ? ' open' : ''}>
+      <summary><div class="tn">${esc(tc.name)}</div>
+        <div class="stat ${inL ? 'in' : 'none'}">${stat}${est && inL ? estTag(st.cur || { count: 0 }) : ''}</div>
+        ${sub ? `<div class="sub">${sub}</div>` : ''}</summary>
+      ${teacherWeek(tc.key)}</details>`;
+  });
+  $('#teachSummary').textContent = `${inCount} av ${shown.length} lärare har lektion ${live ? 'just nu' : 'vid vald tid'}`;
+  $('#teachList').innerHTML = rows.length ? rows.join('') : '<p class="empty">Ingen lärare matchar sökningen.</p>';
 }
 
 /* ---------- Salsschema ---------- */
@@ -480,7 +615,7 @@ function renderLists() {
   const opts = a => a.map(v => `<option value="${esc(v)}">`).join('');
   $('#dlRooms').innerHTML = opts(allRooms());
   const all = [...lessons, ...sightings];
-  $('#dlTeachers').innerHTML = opts(uniq(all.map(x => x.teacher)).sort());
+  $('#dlTeachers').innerHTML = opts(teacherList(lessons, sightings).map(x => x.name));
   $('#dlClasses').innerHTML = opts(uniq(all.map(x => x.class_name)).sort());
 }
 
@@ -489,12 +624,13 @@ function render() {
   $('#lockBtn').textContent = unlocked ? '🔓 Upplåst' : '🔒 Låst';
   $$('.lockSlot').forEach(el => { el.hidden = unlocked; });
   $$('.needsAuth').forEach(el => { el.hidden = !unlocked; });
-  renderNow(); renderRoom(); renderSee(); renderEdit(); renderLists();
+  renderTime(); renderNow(); renderTeachers(); renderRoom(); renderSee(); renderEdit(); renderLists();
 }
 
 /* ---------- Lås / flikar ---------- */
 function showTab(name) {
-  for (const t of ['now', 'room', 'see', 'edit']) $('#tab-' + t).hidden = t !== name;
+  for (const t of ['now', 'room', 'teach', 'see', 'edit']) $('#tab-' + t).hidden = t !== name;
+  $('#timeBox').hidden = !(name === 'now' || name === 'teach');
   $$('.tabs button').forEach(b => b.toggleAttribute('aria-current', b.dataset.tab === name));
   $$('.tabs button').forEach(b => { if (b.dataset.tab === name) b.setAttribute('aria-current', 'page'); });
   window.scrollTo(0, 0);
@@ -565,9 +701,9 @@ document.addEventListener('click', async e => {
       viewOverride = { day: Number($('#ovDay').value), time: $('#ovTime').value };
       p.hidden = false;
     } else { viewOverride = null; p.hidden = true; }
-    return renderNow();
+    return renderViews();
   }
-  if (b.id === 'ovNow') { viewOverride = null; $('#timePanel').hidden = true; return renderNow(); }
+  if (b.id === 'ovNow') { viewOverride = null; $('#timePanel').hidden = true; return renderViews(); }
 
   if (d.exact !== undefined) {
     const en = ENTRIES[Number(d.exact)]; if (!en) return;
@@ -600,9 +736,16 @@ $('#roomSel').addEventListener('change', renderRoom);
 for (const id of ['#ovDay', '#ovTime']) {
   $(id).addEventListener('change', () => {
     viewOverride = { day: Number($('#ovDay').value), time: $('#ovTime').value || nowHM() };
-    renderNow();
+    renderViews();
   });
 }
+$('#tSearch').addEventListener('input', renderTeachers);
+// kom ihåg vilka lärare användaren själv fällt ut (så de inte stängs vid uppdatering)
+document.addEventListener('toggle', e => {
+  const el = e.target;
+  if (!el.dataset || !el.dataset.teacher || el.dataset.auto) return;
+  if (el.open) openTeachers.add(el.dataset.teacher); else openTeachers.delete(el.dataset.teacher);
+}, true);
 
 sForm.addEventListener('submit', async e => {
   e.preventDefault();
@@ -643,7 +786,7 @@ lForm.addEventListener('submit', async e => {
 /* ---------- Start ---------- */
 if (password) tryLogin(password, true);
 load();
-setInterval(renderNow, 30000);
+setInterval(renderViews, 30000);
 setInterval(() => { if (!document.hidden) load(true); }, 60000);
 </script>
 </body>
