@@ -37,6 +37,24 @@ vercel dev
 - Exact lessons always win: a guess that overlaps an exact lesson is hidden.
 - The schedule is assumed to repeat every week (no A/B weeks yet).
 
+## Room status and "Snart lediga"
+
+- Three states per room at a chosen weekday/time: **busy** (a lesson or fresh sighting covers it), **free**
+  (we know something about the room during that half-day, but no lesson covers the time) and **unknown**
+  (nothing known about the room that half-day). Half-day split = `CFG.split` (11:50).
+- "Snart lediga" lists rooms whose current lesson ends within 10/20/30/60 min, sorted by time left. Back-to-back
+  lessons in the same room count as one. Guessed end times are flagged. "Ledig minst" filters on how long the
+  room stays free afterwards. Works with "Ändra tid" too (plan ahead).
+
+## Teachers
+
+- No separate table: teachers are the names written in the *teacher* field of lessons and sightings.
+- Several teachers in one field: separate with comma, `&` or `och` ("Henrik, Natalie").
+- Names are matched ignoring case and extra spaces. "Natalie" and "Natalie Svensson" are two different names
+  (but searching "natalie" finds both) - keep spelling consistent; the field autocompletes existing names.
+- The **Lärare** tab shows where each teacher is right now (or at a chosen time), next lesson, last sighting today,
+  and a weekly schedule when you tap the name.
+
 ## Known rough edges / next steps
 
 - Password is shared and stored in the browser's localStorage (fine for a POC).
