@@ -98,6 +98,9 @@
   .stat.soon { color:#8a5200; }
   .controls .controls { margin:0; }
 
+  .tag.ok { background:#dff3e6; color:#0d5a2e; }
+  .lesson.free { border-left-color:var(--free); }
+
   .tabs { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line);
           display:flex; padding-bottom:env(safe-area-inset-bottom); z-index:6; }
   .tabs button { flex:1; border:0; background:none; padding:8px 2px; min-height:58px; font:inherit; font-size:11px;
@@ -194,11 +197,17 @@
     <div class="lockSlot"></div>
     <div class="needsAuth">
       <form id="sForm" class="card" autocomplete="off">
-        <h2>Jag ser en lektion just nu</h2>
-        <p class="hint">Alla fält är valfria. Tomt tidsfält betyder "nu".</p>
+        <div class="seg" role="group" aria-label="Typ av observation">
+          <button type="button" data-kind="lesson" aria-pressed="true">Lektion pågår</button>
+          <button type="button" data-kind="free" aria-pressed="false">Tom / ledig</button>
+        </div>
+        <h2 id="sTitle" style="margin-top:14px">Jag ser en lektion just nu</h2>
+        <p class="hint" id="sHint">Alla fält är valfria. Tomt tidsfält betyder "nu".</p>
         <label>Sal <input name="room" list="dlRooms" placeholder="t.ex. A207 (eller bara 207)" autocapitalize="characters"></label>
-        <label>Lärare <input name="teacher" list="dlTeachers" placeholder="t.ex. Henrik (flera: Henrik, Natalie)"></label>
-        <label>Klass / grupp <input name="class_name" list="dlClasses" placeholder="t.ex. TE21"></label>
+        <div id="lessonFields">
+          <label>Lärare <input name="teacher" list="dlTeachers" placeholder="t.ex. Henrik (flera: Henrik, Natalie)"></label>
+          <label>Klass / grupp <input name="class_name" list="dlClasses" placeholder="t.ex. TE21"></label>
+        </div>
         <label>Anteckning <input name="notes" placeholder="t.ex. Kemisalen"></label>
         <details>
           <summary>Jag såg det vid en annan tid</summary>
@@ -280,8 +289,9 @@ const CFG = {
   pm: { from: '12:10', start: '12:20', end: '15:10' },
   slack: 30,   // en eftermiddagsobservation upp till så här lång tid efter end räknas fortfarande in
 };
-// Gräns mellan förmiddags- och eftermiddagspass för "okänd": mitt i lunchen (11:50)
-const splitMin = () => Math.round((toMin(CFG.am.until) + toMin(CFG.pm.from)) / 2);
+// Gräns mellan förmiddags- och eftermiddagspass = tidigaste möjliga eftermiddagsstart (12:10).
+// Lunchen räknas alltså till förmiddagen: en sal vars förmiddagslektion slutat är ledig t.o.m. 12:10.
+const splitMin = () => toMin(CFG.pm.from);
 
 const pad = n => String(n).padStart(2, '0');
 const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
@@ -293,25 +303,55 @@ const normRoom = s => { s = String(s || '').toUpperCase().replace(/\s+/g, ''); r
 const floorOf = r => { const m = /^A(\d)/.exec(r); return m ? Number(m[1]) : null; };
 const roomCmp = (a, b) => a.localeCompare(b, 'sv', { numeric: true });
 
-// Tidsram en enskild observation antas tillhöra
-function sightingWindow(sg) {
-  const t = toMin(sg.seen_time), S = CFG.slack;
-  const a0 = toMin(CFG.am.start), a1 = toMin(CFG.am.end);
-  const p0 = toMin(CFG.pm.start), p1 = toMin(CFG.pm.end);
-  if (t >= toMin(CFG.am.from) && t < toMin(CFG.am.until)) return { s: Math.min(t, a0), e: Math.max(t, a1) };
-  if (t >= toMin(CFG.pm.from) && t <= p1 + S) return { s: Math.min(t, p0), e: Math.max(t, p1) };
-  return { s: t, e: t };   // utanför standardpassen: bara en punkt, ingen gissad längd
-}
-
+const isFree = sg => sg.kind === 'free';   // "salen är tom/ledig"-observation (äldre rader saknar kind = lektion)
+const stamp = sg => sg.seen_date + ' ' + sg.seen_time;
 const overlaps = (c, l) =>
   (c.s < l.e && c.e > l.s) || (c.s === c.e && c.s >= l.s && c.s < l.e);
+const touches = (x, r0, r1) => x.s < r1 && (x.e > r0 || (x.s === x.e && x.s >= r0));
 
-// Observationer i samma sal + veckodag vars tidsramar överlappar slås ihop
-// och tidsramen växer så att den täcker alla observationer.
-function buildClusters(sightings) {
-  const groups = new Map();
+// Vilket lektionspass ett klockslag hör till: 'am', 'pm' eller null (lunch / utanför passen)
+function blockOfTime(t) {
+  if (t >= toMin(CFG.am.from) && t < toMin(CFG.am.until)) return 'am';
+  if (t >= toMin(CFG.pm.from) && t <= toMin(CFG.pm.end) + CFG.slack) return 'pm';
+  return null;
+}
+
+// Tidsram en enskild lektionsobservation antas tillhöra
+function sightingWindow(sg) {
+  const t = toMin(sg.seen_time), blk = blockOfTime(t);
+  if (blk === 'am') return { s: Math.min(t, toMin(CFG.am.start)), e: Math.max(t, toMin(CFG.am.end)) };
+  if (blk === 'pm') return { s: Math.min(t, toMin(CFG.pm.start)), e: Math.max(t, toMin(CFG.pm.end)) };
+  return { s: t, e: t };   // lunch/utanför passen: bara en punkt, ingen gissad längd
+}
+
+// Per sal + veckodag + pass avgör den SENASTE observationen om passet är "ledigt" eller har lektion.
+// Returnerar Map 'sal|dag|pass' -> antal ledig-observationer, bara för pass där den senaste är "ledig".
+function freeBlockMap(sightings) {
+  const g = new Map();
   for (const sg of sightings) {
     if (!sg.room || sg.day < 1 || sg.day > 5) continue;
+    const blk = blockOfTime(toMin(sg.seen_time));
+    if (!blk) continue;
+    const key = sg.room + '|' + sg.day + '|' + blk;
+    const o = g.get(key) || { latest: null, nFree: 0 };
+    if (!o.latest || stamp(sg) > stamp(o.latest) || (stamp(sg) === stamp(o.latest) && !isFree(sg))) o.latest = sg;
+    if (isFree(sg)) o.nFree++;
+    g.set(key, o);
+  }
+  const out = new Map();
+  for (const [k, o] of g) if (isFree(o.latest)) out.set(k, o.nFree);
+  return out;
+}
+
+// Lektionsobservationer i samma sal + veckodag vars tidsramar överlappar slås ihop
+// och tidsramen växer så att den täcker alla observationer.
+function buildClusters(sightings) {
+  const freed = freeBlockMap(sightings);
+  const groups = new Map();
+  for (const sg of sightings) {
+    if (isFree(sg) || !sg.room || sg.day < 1 || sg.day > 5) continue;
+    const blk = blockOfTime(toMin(sg.seen_time));
+    if (blk && freed.has(sg.room + '|' + sg.day + '|' + blk)) continue;   // senare ledig-observation vinner
     const w = sightingWindow(sg), key = sg.room + '|' + sg.day;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push({ sg, s: w.s, e: w.e });
@@ -336,7 +376,8 @@ function buildClusters(sightings) {
   return out;
 }
 
-// Exakta lektioner + gissningar. Exakta vinner: gissningar som överlappar en exakt lektion tas bort.
+// Exakta lektioner + gissningar + "registrerad ledig"-pass.
+// Exakta vinner: gissningar och ledig-pass som överlappar en exakt lektion tas bort.
 function buildEntries(lessons, sightings) {
   const exact = lessons.map(l => ({
     source: 'exact', id: l.id, room: normRoom(l.room), day: l.day, start: l.start_time, end: l.end_time,
@@ -344,36 +385,62 @@ function buildEntries(lessons, sightings) {
     class_name: l.class_name || '', teacher: l.teacher || '', notes: l.notes || '',
   }));
   const est = buildClusters(sightings).filter(c => !exact.some(l => l.room === c.room && l.day === c.day && overlaps(c, l)));
-  return exact.concat(est);
+  const free = [];
+  for (const [key, n] of freeBlockMap(sightings)) {
+    const [room, d, blk] = key.split('|'), day = Number(d);
+    const s = toMin(blk === 'am' ? CFG.am.from : CFG.pm.from), e = toMin(blk === 'am' ? CFG.am.until : CFG.pm.end);
+    const f = { source: 'free', room, day, block: blk, s, e, start: toHM(s), end: toHM(e), point: false, count: n,
+                class_name: '', teacher: '', notes: '' };
+    if (!exact.some(l => l.room === room && l.day === day && overlaps(f, l))) free.push(f);
+  }
+  return exact.concat(est, free);
 }
 
 // Status för en sal vid en viss veckodag/tid (minuter). liveDate = dagens datum om vi tittar på "nu".
+//  busy    = lektion (exakt/gissad) eller färsk lektionsobservation täcker tiden
+//  free    = vi vet något om salen under passet och ingen lektion täcker tiden, eller någon såg den tom nyss
+//  unknown = inget känt om salen under det här passet
+// unknownFrom = om salen är ledig men vi inget vet om eftermiddagen: tidigaste möjliga eftermiddagsstart (12:10)
 function roomStatus(room, day, t, entries, sightings, liveDate) {
   const here = entries.filter(x => x.room === room && x.day === day);
-  const list = here.filter(x => !x.point).sort((a, b) => a.s - b.s);
+  const list = here.filter(x => !x.point && x.source !== 'free').sort((a, b) => a.s - b.s);
   const cur = list.find(x => x.s <= t && t < x.e) || null;
   const next = list.find(x => x.s > t) || null;
-  let recent = null;   // observation de senaste 30 min som inte täcks av någon lektion
-  if (!cur && liveDate) {
-    recent = sightings.find(sg => sg.room === room && sg.seen_date === liveDate &&
-      t - toMin(sg.seen_time) >= 0 && t - toMin(sg.seen_time) <= 30) || null;
+
+  // Färsk observation idag (bara i live-läge): lektion senaste 30 min eller "tom" senaste 45 min
+  let live = null;
+  if (liveDate) {
+    const c = sightings.filter(sg => sg.room === room && sg.seen_date === liveDate)
+      .map(sg => ({ sg, age: t - toMin(sg.seen_time) }))
+      .filter(x => x.age >= 0 && x.age <= (isFree(x.sg) ? 45 : 30))
+      .sort((a, b) => a.age - b.age)[0];
+    live = c ? c.sg : null;
   }
-  // Okänd = vi vet inget alls om salen under det här passet (förmiddag/eftermiddag) den här dagen
-  const [b0, b1] = blockRange(t);
-  const known = here.some(x => x.s < b1 && (x.e > b0 || (x.s === x.e && x.s >= b0)));
-  const busy = !!(cur || recent);
-  return { busy, cur, recent, next, hasData: here.length > 0, known, state: busy ? 'busy' : known ? 'free' : 'unknown' };
+  const liveFree = live && isFree(live) ? live : null;
+  const recent = live && !isFree(live) && !cur ? live : null;
+
+  const [b0, b1] = blockRange(t), B = toMin(CFG.pm.from);
+  const known = here.some(x => touches(x, b0, b1));
+  const pmKnown = here.some(x => touches(x, B, 24 * 60));
+  const registered = here.some(x => x.source === 'free' && touches(x, b0, b1));
+  const busy = !liveFree && !!(cur || recent);
+  const state = liveFree ? 'free' : busy ? 'busy' : known ? 'free' : 'unknown';
+  const unknownFrom = (state === 'free' && !liveFree && t < B && !pmKnown && !(next && next.s < B)) ? B : null;
+  return { busy, state, cur, recent, liveFree, next, hasData: here.length > 0, known, pmKnown, registered, unknownFrom };
 }
 
 const blockRange = t => { const m = splitMin(); return t < m ? [0, m] : [m, 24 * 60]; };
 const blockName = t => t < splitMin() ? 'under förmiddagen' : 'under eftermiddagen';
 
 // Salar där en pågående lektion slutar inom windowMin minuter. Lektioner som går direkt in i varandra
-// (slut = start) räknas som en. minFree = kräver att salen sedan är ledig minst så många minuter.
+// (slut = start) räknas som en. Efter lektionen är salen ledig tills nästa kända lektion – eller, om vi inget
+// vet om eftermiddagen, tills tidigaste möjliga eftermiddagsstart (unknownFrom).
+// minFree = kräver att salen sedan är ledig minst så många minuter.
 function soonFree(entries, rooms, day, t, windowMin, minFree = 0) {
-  const out = [];
+  const B = toMin(CFG.pm.from), out = [];
   for (const room of rooms) {
-    const list = entries.filter(x => x.room === room && x.day === day && !x.point).sort((a, b) => a.s - b.s);
+    const here = entries.filter(x => x.room === room && x.day === day);
+    const list = here.filter(x => !x.point && x.source !== 'free').sort((a, b) => a.s - b.s);
     const cur = list.find(x => x.s <= t && t < x.e);
     if (!cur) continue;
     let end = cur.e, endEntry = cur;
@@ -381,10 +448,12 @@ function soonFree(entries, rooms, day, t, windowMin, minFree = 0) {
     const endsIn = end - t;
     if (endsIn > windowMin) continue;
     const nxt = list.find(x => x.s > end) || null;
-    const freeFor = nxt ? nxt.s - end : null;
+    const unknownFrom = (!nxt && end < B && !here.some(x => touches(x, B, 24 * 60))) ? B : null;
+    const freeUntil = nxt ? nxt.s : unknownFrom;           // null = resten av dagen
+    const freeFor = freeUntil !== null ? freeUntil - end : null;
     if (minFree && freeFor !== null && freeFor < minFree) continue;
     out.push({ room, end, endsIn, endEntry, estimated: endEntry.source === 'estimate',
-               nextStart: nxt ? nxt.s : null, freeFor });
+               nextStart: nxt ? nxt.s : null, unknownFrom, freeFor });
   }
   return out.sort((a, b) => a.endsIn - b.endsIn || roomCmp(a.room, b.room));
 }
@@ -431,6 +500,7 @@ function teacherStatus(key, day, t, entries, sightings, liveDate) {
 let lessons = [], sightings = [], ENTRIES = [];
 let password = '';
 try { password = localStorage.getItem('pw') || ''; } catch (e) {}
+let sKind = 'lesson';
 let unlocked = false, nowMode = 'all', statusFilter = 'all', soonWin = 20, soonMin = 0, floorFilter = '', viewOverride = null;
 
 const $ = s => document.querySelector(s);
@@ -477,22 +547,29 @@ function roomRow(room, st, t) {
       <div class="stat unk">Okänd</div>
       <div class="sub">Inget känt om salen ${blockName(t)}${st.next ? ' · nästa känd lektion ' + st.next.start : ''}</div></div></div>`;
   }
-  const est = st.cur ? st.cur.source === 'estimate' : !!st.recent;
-  let stat, sub = '';
-  if (st.cur) { stat = `Upptagen till ${st.cur.end}`; sub = lessonText(st.cur); }
-  else if (st.recent) { stat = `Upptagen (sedd ${st.recent.seen_time})`; sub = lessonText(st.recent); }
-  else if (st.next) {
+  const est = !st.liveFree && (st.cur ? st.cur.source === 'estimate' : !!st.recent);
+  let stat, sub = '';   // sub är färdig HTML
+  if (st.liveFree) {
+    stat = `Ledig – sedd tom ${esc(st.liveFree.seen_time)}`;
+    if (st.cur) sub = esc(`Enligt schema: ${lessonText(st.cur) || 'lektion'} till ${st.cur.end}`);
+  } else if (st.cur) { stat = `Upptagen till ${st.cur.end}`; sub = esc(lessonText(st.cur)); }
+  else if (st.recent) { stat = `Upptagen (sedd ${esc(st.recent.seen_time)})`; sub = esc(lessonText(st.recent)); }
+  else if (st.unknownFrom !== null) {
+    stat = `Ledig till ${toHM(st.unknownFrom)}`;
+    sub = 'Därefter okänd – inget känt om eftermiddagen';
+  } else if (st.next) {
     stat = `Ledig till ${st.next.start}`;
     sub = `Nästa ${st.next.start}–${st.next.end}` + (lessonText(st.next) ? ' · ' + esc(lessonText(st.next)) : '') +
           (st.next.source === 'estimate' ? estTag(st.next) : '');
   } else {
     stat = 'Ledig resten av dagen';
   }
-  const subHtml = st.next && !st.cur && !st.recent ? sub : esc(sub);
-  return `<div class="room ${st.busy ? 'busy' : 'free'}${est ? ' est' : ''}">
+  const kind = st.busy ? 'busy' : 'free';
+  const regTag = !st.busy && st.registered && !st.liveFree ? '<span class="tag ok">registrerad ledig</span>' : '';
+  return `<div class="room ${kind}${est ? ' est' : ''}">
     <div class="rname">${esc(room)}</div>
-    <div><div class="stat ${st.busy ? 'busy' : 'free'}">${stat}${est ? estTag(st.cur || { count: 0 }) : ''}</div>
-    ${subHtml ? `<div class="sub">${subHtml}</div>` : ''}</div></div>`;
+    <div><div class="stat ${kind}">${stat}${est ? estTag(st.cur || { count: 0 }) : ''}${regTag}</div>
+    ${sub ? `<div class="sub">${sub}</div>` : ''}</div></div>`;
 }
 
 function viewTime() {
@@ -543,9 +620,11 @@ function renderNow() {
       (soonMin ? ` (sedan ledig minst ${soonMin} min)` : '');
     let html = res.map(x => {
       const ca = x.estimated ? 'ca ' : '';
-      const tail = x.nextStart === null
-        ? 'Sedan ingen känd lektion resten av dagen'
-        : `Sedan ledig ${toHM(x.end)}–${toHM(x.nextStart)} (${fmtDur(x.freeFor)})`;
+      const tail = x.unknownFrom !== null
+        ? `Sedan ledig ${toHM(x.end)}–${toHM(x.unknownFrom)} (${fmtDur(x.freeFor)}), därefter okänd`
+        : x.nextStart === null
+          ? 'Sedan ingen känd lektion resten av dagen'
+          : `Sedan ledig ${toHM(x.end)}–${toHM(x.nextStart)} (${fmtDur(x.freeFor)})`;
       return `<div class="room soon${x.estimated ? ' est' : ''}"><div class="rname">${esc(x.room)}</div><div>
         <div class="stat soon">Slutar ${ca}${toHM(x.end)} · om ${ca}${x.endsIn} min${x.estimated ? '<span class="tag">gissad sluttid</span>' : ''}</div>
         ${lessonText(x.endEntry) ? `<div class="sub">${esc(lessonText(x.endEntry))}</div>` : ''}
@@ -653,6 +732,11 @@ function renderRoom() {
     html += `<div class="dayh">${cap(DAYS[d])}${d === today ? ' (idag)' : ''}</div>`;
     if (!items.length) { html += '<div class="sub" style="padding:0 4px">Inget känt</div>'; continue; }
     for (const x of items) {
+      if (x.source === 'free') {
+        html += `<div class="lesson free"><div class="time">${x.block === 'am' ? 'Förmiddag' : 'Eftermiddag'}</div>
+          <div><b>Ledig</b><span class="tag ok">registrerad · ${x.count} obs.</span></div></div>`;
+        continue;
+      }
       const idx = ENTRIES.indexOf(x), est = x.source === 'estimate';
       html += `<div class="lesson${est ? ' est' : ''}">
         <div class="time">${x.point ? 'Sedd ' + x.start : x.start + '–' + x.end}</div>
@@ -667,7 +751,22 @@ function renderRoom() {
 }
 
 /* ---------- Registrera ---------- */
+function describeFree(row) {
+  if (!row.room) return 'Sparad utan sal – då vet appen inte vilken sal som är ledig. Ange en sal så räknas den med.';
+  const live = row.seen_date === todayStr() ? ' Salen visas som ledig i 45 minuter.' : '';
+  if (row.day < 1 || row.day > 5) return 'Sparad, men den infaller på en helg och räknas inte i veckoschemat.' + live;
+  const t = toMin(row.seen_time), blk = blockOfTime(t);
+  if (!blk) return 'Sparad. Klockslaget ligger under lunchen eller utanför lektionspassen, så veckoschemat påverkas inte.' + live;
+  const pass = blk === 'am' ? 'förmiddagen' : 'eftermiddagen';
+  const fe = ENTRIES.find(x => x.source === 'free' && x.room === row.room && x.day === row.day && x.block === blk);
+  if (fe) return `Räknas som att ${row.room} är ledig ${pass} på ${DAYS[row.day]}ar (${fe.count} obs.), tills någon ser en lektion där.` + live;
+  const ex = ENTRIES.find(x => x.source === 'exact' && x.room === row.room && x.day === row.day && overlaps({ s: blk === 'am' ? toMin(CFG.am.from) : toMin(CFG.pm.from), e: blk === 'am' ? toMin(CFG.am.until) : toMin(CFG.pm.end) }, x));
+  if (ex) return `Schemat har en exakt lektion ${ex.start}–${ex.end} i den salen ${pass}, så veckoschemat ändras inte.` + live;
+  return 'Sparad, men en senare observation visar lektion i samma pass – den vinner i veckoschemat.' + live;
+}
+
 function describeSighting(row) {
+  if (isFree(row)) return describeFree(row);
   if (!row.room) return 'Sparad utan sal – den syns därför inte i schemat. Ange en sal så räknas den med.';
   if (row.day < 1 || row.day > 5) return 'Sparad, men den infaller på en helg och räknas inte i veckoschemat.';
   const t = toMin(row.seen_time);
@@ -680,7 +779,7 @@ function describeSighting(row) {
 }
 
 function sightingItem(sg) {
-  const main = [sg.room || '(ingen sal)', sg.teacher, sg.class_name].filter(Boolean).join(' · ');
+  const main = (isFree(sg) ? [sg.room || '(ingen sal)', 'Tom/ledig'] : [sg.room || '(ingen sal)', sg.teacher, sg.class_name]).filter(Boolean).join(' · ');
   return `<div class="item"><div><b>${esc(main)}</b>
     <div class="sub">${cap(DAYS[sg.day]).slice(0, 3)} ${fmtDate(sg.seen_date)} kl ${esc(sg.seen_time)}${sg.notes ? ' · ' + esc(sg.notes) : ''}</div></div>
     <div class="acts"><button type="button" class="btn small danger" data-delsg="${sg.id}">Ta bort</button></div></div>`;
@@ -758,6 +857,17 @@ document.addEventListener('keydown', e => {
 });
 
 const lForm = $('#lForm'), sForm = $('#sForm');
+
+function applyKind() {
+  const free = sKind === 'free';
+  $$('[data-kind]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === sKind)));
+  $('#sTitle').textContent = free ? 'Jag ser en tom sal' : 'Jag ser en lektion just nu';
+  $('#sHint').textContent = free
+    ? 'Salen räknas som ledig förmiddagen/eftermiddagen den dagen tills någon ser en lektion där, och visas som ledig i 45 min. Alla fält är valfria.'
+    : 'Alla fält är valfria. Tomt tidsfält betyder "nu".';
+  $('#lessonFields').hidden = free;
+  $('#sBtn').textContent = free ? 'Registrera som ledig' : 'Registrera';
+}
 const lf = n => lForm.elements[n];
 
 function resetLessonForm() {
@@ -785,6 +895,7 @@ document.addEventListener('click', async e => {
   }
   if (b.classList.contains('pwBtn')) { const inp = b.closest('.card').querySelector('.pwInput'); return tryLogin(inp.value); }
 
+  if (d.kind) { sKind = d.kind; return applyKind(); }
   if (d.mode) { nowMode = d.mode; return renderNow(); }
   if (d.filter) { statusFilter = d.filter; return renderNow(); }
   if (b.id === 'chgTime') {
@@ -847,9 +958,10 @@ sForm.addEventListener('submit', async e => {
   e.preventDefault();
   const f = new FormData(sForm), btn = $('#sBtn');
   const body = {
+    kind: sKind,
     room: normRoom(f.get('room')),
-    teacher: String(f.get('teacher') || '').trim(),
-    class_name: String(f.get('class_name') || '').trim(),
+    teacher: sKind === 'free' ? '' : String(f.get('teacher') || '').trim(),
+    class_name: sKind === 'free' ? '' : String(f.get('class_name') || '').trim(),
     notes: String(f.get('notes') || '').trim(),
     seen_date: f.get('seen_date') || todayStr(),
     seen_time: f.get('seen_time') || nowHM(),
@@ -859,7 +971,7 @@ sForm.addEventListener('submit', async e => {
     const row = await api('/api/sightings', { method: 'POST', body: JSON.stringify(body) });
     await load(true);
     const box = $('#seeResult');
-    box.innerHTML = `<b>Registrerat:</b> ${esc([row.room || 'ingen sal', row.teacher, row.class_name].filter(Boolean).join(' · '))}
+    box.innerHTML = `<b>Registrerat:</b> ${esc((isFree(row) ? [row.room || 'ingen sal', 'ledig'] : [row.room || 'ingen sal', row.teacher, row.class_name]).filter(Boolean).join(' · '))}
       kl ${esc(row.seen_time)}<div class="sub">${esc(describeSighting(row))}</div>`;
     box.hidden = false;
     sForm.reset();

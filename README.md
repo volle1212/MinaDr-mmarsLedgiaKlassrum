@@ -31,8 +31,10 @@ vercel dev
 
 ## How sightings become a schedule (all in `public/index.html`, see `CFG`)
 
-- Sighting before 11:00 -> guessed morning lesson 08:30-11:20. From 13:00 -> guessed afternoon lesson 12:20-15:10.
-- Between 11:00 and 13:00 (or far outside the standard slots) -> stored as a single point, no length guessed.
+- Sighting 08:00-11:30 -> guessed morning lesson 08:30-11:20 (assumed to have started ~08:00-09:30, ended before lunch).
+- From 12:10 (lunch starts 11:30, earliest lesson 40 min later) -> guessed afternoon lesson 12:20-15:10.
+- Between 11:30 and 12:10 (lunch), before 08:00 or long after the afternoon lesson -> stored as a single point, no length guessed.
+- Estimates are computed in the browser from the raw sightings and never stored, so changing `CFG` re-interprets all existing data.
 - Sightings in the same room + weekday whose windows overlap are merged; the window grows to cover all of them.
 - Exact lessons always win: a guess that overlaps an exact lesson is hidden.
 - The schedule is assumed to repeat every week (no A/B weeks yet).
@@ -40,11 +42,24 @@ vercel dev
 ## Room status and "Snart lediga"
 
 - Three states per room at a chosen weekday/time: **busy** (a lesson or fresh sighting covers it), **free**
-  (we know something about the room during that half-day, but no lesson covers the time) and **unknown**
-  (nothing known about the room that half-day). Half-day split = `CFG.split` (11:50).
+  (we know something about the room during that half-day and no lesson covers the time, or someone saw it empty
+  in the last 45 min) and **unknown** (nothing known about the room that half-day).
+- Half-days are split at the earliest possible afternoon start (`CFG.pm.from`, 12:10); lunch belongs to the morning.
+- A free room only stays "free" as long as we know something: if nothing is known about the afternoon, a room whose
+  morning lesson ended is shown as "Ledig till 12:10 · Därefter okänd" - never "free for the rest of the day".
 - "Snart lediga" lists rooms whose current lesson ends within 10/20/30/60 min, sorted by time left. Back-to-back
   lessons in the same room count as one. Guessed end times are flagged. "Ledig minst" filters on how long the
-  room stays free afterwards. Works with "Ändra tid" too (plan ahead).
+  room stays free afterwards (until the next known lesson, or until 12:10 if the afternoon is unknown).
+
+## Registering empty rooms
+
+- `sightings.kind` is `lesson` (default, a lesson is going on) or `free` (the room is empty). Older rows and older
+  clients are treated as `lesson`; the column is added automatically (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`).
+- A `free` sighting during a lesson block (08:00-11:30 / 12:10-15:40) marks that room + weekday + half-day as
+  *registered free* in the weekly schedule. Per room/weekday/half-day the **most recent** sighting wins, whether
+  it says lesson or free. Exact lessons always win. Free sightings during lunch only count live.
+- Live (viewing "now"): a "free" sighting from the last 45 min makes the room free even if the schedule says
+  there is a lesson (the schedule is shown as a note); a lesson sighting counts for 30 min.
 
 ## Teachers
 

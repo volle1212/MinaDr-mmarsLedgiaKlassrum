@@ -28,11 +28,14 @@ export async function db() {
           seen_time TEXT NOT NULL,       -- 'HH:MM'
           day INT NOT NULL,              -- 0 = söndag ... 6 = lördag
           room TEXT NOT NULL DEFAULT '',
+          kind TEXT NOT NULL DEFAULT 'lesson',  -- 'lesson' = lektion pågår, 'free' = salen är tom
           teacher TEXT NOT NULL DEFAULT '',
           class_name TEXT NOT NULL DEFAULT '',
           notes TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ DEFAULT now()
         )`;
+      // Äldre databaser saknar kind: lägg till, befintliga rader blir 'lesson'
+      await sql`ALTER TABLE sightings ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'lesson'`;
     })();
     ready.catch(() => { ready = null; }); // försök igen vid nästa anrop om det misslyckades
   }

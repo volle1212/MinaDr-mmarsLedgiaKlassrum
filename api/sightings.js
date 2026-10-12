@@ -40,11 +40,13 @@ export default async function handler(req, res) {
       if (!DATE.test(seen_date) || weekday(seen_date) === null) return res.status(400).json({ error: 'Ogiltigt datum' });
       if (!TIME.test(seen_time)) return res.status(400).json({ error: 'Tid måste anges som TT:MM' });
 
-      // Inga fält är obligatoriska
+      // kind: 'lesson' (lektion pågår, standard) eller 'free' (salen är tom). Inga fält är obligatoriska.
+      const kind = b.kind === 'free' ? 'free' : 'lesson';
+      if (b.kind !== undefined && b.kind !== 'lesson' && b.kind !== 'free') return res.status(400).json({ error: 'Ogiltig typ' });
       const [row] = await sql`
-        INSERT INTO sightings (seen_date, seen_time, day, room, teacher, class_name, notes)
-        VALUES (${seen_date}, ${seen_time}, ${weekday(seen_date)}, ${normRoom(b.room)},
-                ${txt(b.teacher)}, ${txt(b.class_name)}, ${txt(b.notes, 500)})
+        INSERT INTO sightings (seen_date, seen_time, day, room, kind, teacher, class_name, notes)
+        VALUES (${seen_date}, ${seen_time}, ${weekday(seen_date)}, ${normRoom(b.room)}, ${kind},
+                ${kind === 'free' ? '' : txt(b.teacher)}, ${kind === 'free' ? '' : txt(b.class_name)}, ${txt(b.notes, 500)})
         RETURNING *`;
       return res.status(201).json(row);
     }
