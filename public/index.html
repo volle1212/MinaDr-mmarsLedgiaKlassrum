@@ -272,11 +272,16 @@ const DAYS = ['söndag','måndag','tisdag','onsdag','torsdag','fredag','lördag'
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
 const CFG = {
-  am: { until: '11:00', start: '08:30', end: '11:20' },  // observation före 11:00  -> förmiddagslektion
-  pm: { from:  '13:00', start: '12:20', end: '15:10' },  // observation från 13:00  -> eftermiddagslektion
-  split: '11:50',                                         // gräns mellan förmiddags- och eftermiddagspass (för 'okänd')
-  slack: 30,                                              // hur långt utanför standardtiden en observation räknas in (min)
+  // Förmiddagslektion: observationer från am.from till am.until. Lektionen antas ha börjat ca 08:00-09:30 och
+  // slutat före lunch (lunch börjar 11:30). Standardtid som visas: start-end.
+  am: { from: '08:00', until: '11:30', start: '08:30', end: '11:20' },
+  // Lunch ca 11:30-12:10: observationer där sparas bara som en punkt (ingen lektion gissas).
+  // Eftermiddagslektion: tidigaste start 12:10 (40 min efter lunchens start). Standardtid som visas: start-end.
+  pm: { from: '12:10', start: '12:20', end: '15:10' },
+  slack: 30,   // en eftermiddagsobservation upp till så här lång tid efter end räknas fortfarande in
 };
+// Gräns mellan förmiddags- och eftermiddagspass för "okänd": mitt i lunchen (11:50)
+const splitMin = () => Math.round((toMin(CFG.am.until) + toMin(CFG.pm.from)) / 2);
 
 const pad = n => String(n).padStart(2, '0');
 const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
@@ -293,7 +298,7 @@ function sightingWindow(sg) {
   const t = toMin(sg.seen_time), S = CFG.slack;
   const a0 = toMin(CFG.am.start), a1 = toMin(CFG.am.end);
   const p0 = toMin(CFG.pm.start), p1 = toMin(CFG.pm.end);
-  if (t < toMin(CFG.am.until) && t >= a0 - S) return { s: Math.min(t, a0), e: Math.max(t, a1) };
+  if (t >= toMin(CFG.am.from) && t < toMin(CFG.am.until)) return { s: Math.min(t, a0), e: Math.max(t, a1) };
   if (t >= toMin(CFG.pm.from) && t <= p1 + S) return { s: Math.min(t, p0), e: Math.max(t, p1) };
   return { s: t, e: t };   // utanför standardpassen: bara en punkt, ingen gissad längd
 }
@@ -360,8 +365,8 @@ function roomStatus(room, day, t, entries, sightings, liveDate) {
   return { busy, cur, recent, next, hasData: here.length > 0, known, state: busy ? 'busy' : known ? 'free' : 'unknown' };
 }
 
-const blockRange = t => { const m = toMin(CFG.split); return t < m ? [0, m] : [m, 24 * 60]; };
-const blockName = t => t < toMin(CFG.split) ? 'under förmiddagen' : 'under eftermiddagen';
+const blockRange = t => { const m = splitMin(); return t < m ? [0, m] : [m, 24 * 60]; };
+const blockName = t => t < splitMin() ? 'under förmiddagen' : 'under eftermiddagen';
 
 // Salar där en pågående lektion slutar inom windowMin minuter. Lektioner som går direkt in i varandra
 // (slut = start) räknas som en. minFree = kräver att salen sedan är ledig minst så många minuter.
@@ -653,7 +658,7 @@ function renderRoom() {
         <div class="time">${x.point ? 'Sedd ' + x.start : x.start + '–' + x.end}</div>
         <div>
           <div><b>${esc(lessonText(x) || (est ? 'Okänd lektion' : 'Lektion'))}</b>${est ? estTag(x) : ''}</div>
-          ${est && x.point ? '<div class="sub">Utanför standardpassen – ingen tidsram gissad</div>' : ''}
+          ${est && x.point ? '<div class="sub">Under lunch eller utanför standardpassen – ingen tidsram gissad</div>' : ''}
           ${est ? `<button type="button" class="btn small" data-exact="${idx}">Gör till exakt lektion</button>` : ''}
         </div></div>`;
     }
@@ -669,7 +674,7 @@ function describeSighting(row) {
   const ex = ENTRIES.find(x => x.source === 'exact' && x.room === row.room && x.day === row.day && x.s <= t && t < x.e);
   if (ex) return `Stämmer med inlagd lektion ${ex.start}–${ex.end} i ${row.room}.`;
   const est = ENTRIES.find(x => x.source === 'estimate' && x.room === row.room && x.day === row.day && x.s <= t && t <= x.e);
-  if (est && est.point) return `Sparad som en punkt kl ${row.seen_time}. Det är utanför standardpassen, så ingen tidsram gissas.`;
+  if (est && est.point) return `Sparad som en punkt kl ${row.seen_time}. Det är under lunchen eller utanför standardpassen, så ingen tidsram gissas.`;
   if (est) return `Räknas som lektion ca ${est.start}–${est.end} i ${row.room} (gissning${est.count > 1 ? ', ' + est.count + ' observationer' : ''}).`;
   return 'Sparad.';
 }
